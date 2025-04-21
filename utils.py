@@ -1,7 +1,8 @@
 import asyncio
 import signal
 import logging
-from homewizard_energy import HomeWizardEnergyV1
+# from homewizard_energy import HomeWizardEnergyV1
+from homewizard_energy import HomeWizardEnergy
 from device_classes import complete_device, socket_device, p1_device
 import json
 

@@ -1,5 +1,6 @@
 import asyncio
-from homewizard_energy import HomeWizardEnergyV1
+from homewizard_energy import HomeWizardEnergy
+
 from utils import GracefulKiller, setup_logger, initialize_devices
 from contextlib import AsyncExitStack
 import logging
@@ -59,7 +60,7 @@ async def main(all_devices: list[complete_device]):
     async with AsyncExitStack() as stack:
         hwe_devices = []
         for device in all_devices:
-            device.hwe_device = await stack.enter_async_context(HomeWizardEnergyV1(host=device.ip_address))
+            device.hwe_device = await stack.enter_async_context(HomeWizardEnergy(host=device.ip_address))
             hwe_devices.append(device.hwe_device)
 
         main_task = asyncio.create_task(main_loop(all_devices, sorted_sockets, logger))

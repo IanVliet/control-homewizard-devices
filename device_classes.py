@@ -1,5 +1,6 @@
 import asyncio
-from homewizard_energy import HomeWizardEnergyV1
+# from homewizard_energy import HomeWizardEnergyV1
+from homewizard_energy import HomeWizardEnergy
 from contextlib import AsyncExitStack
 import logging
 import sys
@@ -36,7 +37,7 @@ class complete_device:
         return self._hwe_device
 
     @hwe_device.setter
-    def hwe_device(self, device: HomeWizardEnergyV1):
+    def hwe_device(self, device: HomeWizardEnergy):
         self._hwe_device = device
 
     
@@ -46,9 +47,9 @@ class complete_device:
         logger.info(hwe_device_info)
 
         # Get measurement --> power and current
-        measurement = await self.hwe_device.measurement()
-        self.inst_power_usage = measurement.power_w
-        self.inst_current = measurement.current_a
+        measurement = await self.hwe_device.data()
+        self.inst_power_usage = measurement.active_power_w
+        self.inst_current = measurement.active_current_a
 
         # log power and current
         logger.info(f"{self.device_name} power: {self.inst_power_usage}")
@@ -83,9 +84,9 @@ class socket_device(complete_device):
     
     async def perform_measurement(self, logger: logging.Logger):
         # Get power and current measurement
-        measurement = await self.hwe_device.measurement()
-        self.inst_power_usage = measurement.power_w
-        self.inst_current = measurement.current_a
+        measurement = await self.hwe_device.data()
+        self.inst_power_usage = measurement.active_power_w
+        self.inst_current = measurement.active_current_a
 
         # get socket state
         device_state = await self.hwe_device.state()
@@ -111,7 +112,7 @@ class socket_device(complete_device):
     
 
     async def update_power_state(self, logger: logging.Logger):
-        await self.hwe_device.state(power_on=self.updated_state)
+        await self.hwe_device.state_set(power_on=self.updated_state)
         logger.info(f"{self.device_name} power state set to: {self.updated_state}")
 
     
@@ -125,9 +126,9 @@ class p1_device(complete_device):
 
     async def perform_measurement(self, logger: logging.Logger):
         # Get power and current measurement
-        measurement = await self.hwe_device.measurement()
-        self.inst_power_usage = measurement.power_w
-        self.inst_current = measurement.current_a
+        measurement = await self.hwe_device.data()
+        self.inst_power_usage = measurement.active_power_w
+        self.inst_current = measurement.active_current_a
 
         # log the power and current
         logger.info(f"{self.device_name} power: {self.inst_power_usage}")
