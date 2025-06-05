@@ -1,3 +1,8 @@
-config_devices.json
+src/config_devices.json
 app.log
 homewizard_venv
+data/solar_prediction.csv
+data/solar_prediction.parquet
+__pycache__/
+.cache.sqlite
+*.pyc

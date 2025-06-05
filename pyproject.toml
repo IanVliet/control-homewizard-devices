@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "control-homewizard-devices"
+version = "0.0.1"
+authors = [
+  { name="Ian van Vliet", email="ian.vvliet@gmail.com" },
+]
+description = "A small python package controlling and scheduling homewizard devices"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://https://github.com/IanVliet/control-homewizard-devices"
+Issues = "https://https://github.com/IanVliet/control-homewizard-devices/issues"
+
+[tool.hatch.build]
+packages = ["src/control_homewizard_devices"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

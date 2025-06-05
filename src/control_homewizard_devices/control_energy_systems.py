@@ -1,15 +1,15 @@
 import asyncio
 from homewizard_energy import HomeWizardEnergy
 
-from utils import GracefulKiller, setup_logger, initialize_devices
+from control_homewizard_devices.utils import GracefulKiller, setup_logger, initialize_devices
 from contextlib import AsyncExitStack
 import logging
 import sys
-from device_classes import complete_device, socket_device, p1_device
+from control_homewizard_devices.device_classes import complete_device, socket_device, p1_device
 
 
 def get_total_available_power(all_devices: list[complete_device]):
-    return sum(device.get_instantaneous_power() for device in all_devices)
+    return sum(power for power in (device.get_instantaneous_power() for device in all_devices) if power is not None)
 
 
 def determine_socket_states(total_power, sorted_sockets: list[socket_device]):
