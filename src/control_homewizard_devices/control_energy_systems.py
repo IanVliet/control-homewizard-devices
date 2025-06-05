@@ -79,9 +79,9 @@ async def main(all_devices: list[complete_device]):
         logger.info("Shutdown complete")
         sys.exit(130)
 
-    #         # Get all data and remap v1 data to new v2 structure
-    #         # print(await socket_bike.combined())
+def entrypoint():
+    all_devices = initialize_devices("./config_devices.json")
+    asyncio.run(main(all_devices))
 
 if  __name__ == "__main__":
-    all_devices = initialize_devices("config_devices.json")
-    asyncio.run(main(all_devices))
+    entrypoint()
