@@ -3,7 +3,7 @@ import signal
 import logging
 # from homewizard_energy import HomeWizardEnergyV1
 from homewizard_energy import HomeWizardEnergy
-from device_classes import complete_device, socket_device, p1_device
+from control_homewizard_devices.device_classes import complete_device, socket_device, p1_device
 import json
 
 class GracefulKiller:
@@ -57,7 +57,8 @@ def initialize_devices(config_json_filepath) -> list[complete_device]:
         config_data = json.load(config_file)
 
     all_devices = []
-    for device_dict in config_data:
+    device_data = config_data["devices"]
+    for device_dict in device_data:
         device_class = device_type_map.get(device_dict["device_type"], complete_device)
         device = device_class(**device_dict)
         all_devices.append(device)

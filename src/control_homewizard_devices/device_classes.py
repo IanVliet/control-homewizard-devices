@@ -42,18 +42,21 @@ class complete_device:
 
     
     async def perform_measurement(self, logger: logging.Logger):
-        # Get device information, like firmware version
-        hwe_device_info = await self.hwe_device.device()
-        logger.info(hwe_device_info)
+        if self.hwe_device is not None:
+            # Get device information, like firmware version
+            hwe_device_info = await self.hwe_device.device()
+            logger.info(hwe_device_info)
 
-        # Get measurement --> power and current
-        measurement = await self.hwe_device.data()
-        self.inst_power_usage = measurement.active_power_w
-        self.inst_current = measurement.active_current_a
+            # Get measurement --> power and current
+            measurement = await self.hwe_device.data()
+            self.inst_power_usage = measurement.active_power_w
+            self.inst_current = measurement.active_current_a
 
-        # log power and current
-        logger.info(f"{self.device_name} power: {self.inst_power_usage}")
-        logger.info(f"{self.device_name} current: {self.inst_current}")
+            # log power and current
+            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
+            logger.info(f"{self.device_name} current: {self.inst_current}")
+        else:
+            logger.warning(f"{self.device_name}'s hwe_device is None.")
 
 
     def get_instantaneous_power(self):
@@ -68,14 +71,17 @@ class socket_device(complete_device):
     """
     Class for homewizard energy socket
     """
-    def __init__(self, ip_address: str, device_type, device_name: str, max_power_usage: int | float, priority: int, **kwargs):
+    def __init__(self, ip_address: str, device_type, device_name: str, max_power_usage: int | float, energy_capacity: int | float, priority: int, daily_need: bool, **kwargs):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self._max_power_usage = max_power_usage
+        self.energy_capacity = energy_capacity
         self.priority = priority
+        self.daily_need = daily_need
         # the (instantaneous) attributes that change due to each measurement  
         self.inst_state = None
         # whether the device should power on or off
         self.updated_state = False
+        self.energy_stored = 0.0
 
 
     @property
@@ -83,19 +89,25 @@ class socket_device(complete_device):
         return self._max_power_usage
     
     async def perform_measurement(self, logger: logging.Logger):
-        # Get power and current measurement
-        measurement = await self.hwe_device.data()
-        self.inst_power_usage = measurement.active_power_w
-        self.inst_current = measurement.active_current_a
+        if self.hwe_device is not None:
+            # Get power and current measurement
+            measurement = await self.hwe_device.data()
+            self.inst_power_usage = measurement.active_power_w
+            self.inst_current = measurement.active_current_a
 
-        # get socket state
-        device_state = await self.hwe_device.state()
-        self.inst_state = device_state.power_on
+            # get socket state
+            device_state = await self.hwe_device.state()
+            if device_state is not None:
+                self.inst_state = device_state.power_on
+            else:
+                logger.warning(f"{self.device_name}'s device state is None")
 
-        # log the power, current and state
-        logger.info(f"{self.device_name} power: {self.inst_power_usage}")
-        logger.info(f"{self.device_name} current: {self.inst_current}")
-        logger.info(f"{self.device_name} power state: {self.inst_state}")
+            # log the power, current and state
+            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
+            logger.info(f"{self.device_name} current: {self.inst_current}")
+            logger.info(f"{self.device_name} power state: {self.inst_state}")
+        else:
+            logger.warning(f"{self.device_name}'s hwe_device is None.")
 
     
     def get_instantaneous_power(self):
@@ -104,7 +116,10 @@ class socket_device(complete_device):
         which can be made free by turning the socket off --> therefore this power should count to available power.
         Since we define available power as negative power the function should return -power
         """
-        return -self.inst_power_usage
+        if self.inst_power_usage is None:
+            return None
+        else:
+            return -self.inst_power_usage
     
 
     def should_power_on(self, available_power: int | float):
@@ -112,8 +127,11 @@ class socket_device(complete_device):
     
 
     async def update_power_state(self, logger: logging.Logger):
-        await self.hwe_device.state_set(power_on=self.updated_state)
-        logger.info(f"{self.device_name} power state set to: {self.updated_state}")
+        if self.hwe_device is not None:
+            await self.hwe_device.state_set(power_on=self.updated_state)
+            logger.info(f"{self.device_name} power state set to: {self.updated_state}")
+        else:
+            logger.warning(f"{self.device_name}'s hwe_device is None.")
 
     
 
@@ -125,14 +143,17 @@ class p1_device(complete_device):
         super().__init__(ip_address, device_type, device_name, **kwargs)
 
     async def perform_measurement(self, logger: logging.Logger):
-        # Get power and current measurement
-        measurement = await self.hwe_device.data()
-        self.inst_power_usage = measurement.active_power_w
-        self.inst_current = measurement.active_current_a
+        if self.hwe_device is not None:
+            # Get power and current measurement
+            measurement = await self.hwe_device.data()
+            self.inst_power_usage = measurement.active_power_w
+            self.inst_current = measurement.active_current_a
 
-        # log the power and current
-        logger.info(f"{self.device_name} power: {self.inst_power_usage}")
-        logger.info(f"{self.device_name} current: {self.inst_current}")
+            # log the power and current
+            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
+            logger.info(f"{self.device_name} current: {self.inst_current}")
+        else:
+            logger.warning(f"{self.device_name}'s hwe_device is None.")
 
     
     def get_instantaneous_power(self):
