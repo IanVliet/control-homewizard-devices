@@ -1,4 +1,4 @@
-src/config_devices.json
+config/
 app.log
 homewizard_venv
 data/solar_prediction.csv
