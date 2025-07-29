@@ -5,14 +5,14 @@ import logging
 # from homewizard_energy import HomeWizardEnergyV1
 from homewizard_energy import HomeWizardEnergy
 from control_homewizard_devices.device_classes import (
-    complete_device,
-    socket_device,
-    p1_device,
+    CompleteDevice,
+    SocketDevice,
+    P1Device,
     Battery,
 )
 import json
 
-DEVICE_TYPE_MAP = {"HWE-SKT": socket_device, "HWE-P1": p1_device, "HWE-BAT": Battery}
+DEVICE_TYPE_MAP = {"HWE-SKT": SocketDevice, "HWE-P1": P1Device, "HWE-BAT": Battery}
 
 
 class GracefulKiller:
@@ -57,14 +57,14 @@ def setup_logger(log_level):
     return logger
 
 
-def initialize_devices(config_json_filepath) -> list[complete_device]:
+def initialize_devices(config_json_filepath) -> list[CompleteDevice]:
     with open(config_json_filepath, "r") as config_file:
         config_data = json.load(config_file)
 
     all_devices = []
     device_data = config_data["devices"]
     for device_dict in device_data:
-        device_class = DEVICE_TYPE_MAP.get(device_dict["device_type"], complete_device)
+        device_class = DEVICE_TYPE_MAP.get(device_dict["device_type"], CompleteDevice)
         device = device_class(**device_dict)
         all_devices.append(device)
 

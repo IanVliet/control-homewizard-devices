@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 
 
-class complete_device:
+class CompleteDevice:
     """
     Class for all properties of the device
     """
@@ -72,7 +72,7 @@ class complete_device:
         return self.inst_power_usage
 
 
-class socket_device(complete_device):
+class SocketDevice(CompleteDevice):
     """
     Class for homewizard energy socket
     """
@@ -146,7 +146,7 @@ class socket_device(complete_device):
             logger.warning(f"{self.device_name}'s hwe_device is None.")
 
 
-class p1_device(complete_device):
+class P1Device(CompleteDevice):
     """
     Class for homewizard p1 meter
     """
@@ -181,7 +181,7 @@ class UserInfo:
     token: str
 
 
-class Battery(complete_device):
+class Battery(CompleteDevice):
     """
     Homewizard Battery
     """

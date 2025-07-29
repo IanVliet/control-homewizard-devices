@@ -11,9 +11,9 @@ from contextlib import AsyncExitStack
 import logging
 import sys
 from control_homewizard_devices.device_classes import (
-    complete_device,
-    socket_device,
-    p1_device,
+    CompleteDevice,
+    SocketDevice,
+    P1Device,
 )
 
 
@@ -28,7 +28,7 @@ def get_config_path() -> str:
     return os.path.abspath(os.getenv(CONFIG_ENV_VAR, DEFAULT_CONFIG_PATH))
 
 
-def get_total_available_power(all_devices: list[complete_device]):
+def get_total_available_power(all_devices: list[CompleteDevice]):
     return sum(
         power
         for power in (device.get_instantaneous_power() for device in all_devices)
@@ -36,7 +36,7 @@ def get_total_available_power(all_devices: list[complete_device]):
     )
 
 
-def determine_socket_states(total_power, sorted_sockets: list[socket_device]):
+def determine_socket_states(total_power, sorted_sockets: list[SocketDevice]):
     # available power is defined as - total power
     available_power = -total_power
 
@@ -49,8 +49,8 @@ def determine_socket_states(total_power, sorted_sockets: list[socket_device]):
 
 
 async def main_loop(
-    all_devices: list[complete_device],
-    sorted_sockets: list[socket_device],
+    all_devices: list[CompleteDevice],
+    sorted_sockets: list[SocketDevice],
     logger: logging.Logger,
 ):
     try:
@@ -77,9 +77,9 @@ async def main_loop(
         logger.info("Cleaning up before shutdown...")
 
 
-async def main(all_devices: list[complete_device]):
+async def main(all_devices: list[CompleteDevice]):
     socket_devices = [
-        device for device in all_devices if isinstance(device, socket_device)
+        device for device in all_devices if isinstance(device, SocketDevice)
     ]
     sorted_sockets = sorted(socket_devices, key=lambda d: d.priority)
 
