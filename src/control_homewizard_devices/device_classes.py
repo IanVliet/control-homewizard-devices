@@ -8,6 +8,8 @@ import logging
 import sys
 from dataclasses import dataclass
 
+from .constants import DELTA_T, VariableCategory
+
 
 class CompleteDevice:
     """
@@ -91,6 +93,7 @@ class SocketDevice(CompleteDevice):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self._max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
+        self.policy = SocketDeviceSchedulePolicy(self, DELTA_T)
         # TODO: Reconsider whether the class needs priority or not
         self.priority = priority
         self.daily_need = daily_need
@@ -203,6 +206,7 @@ class Battery(CompleteDevice):
         self._user_info = UserInfo(**user_info)
         self._token = self._user_info.token
 
+        self.policy = BatterySchedulePolicy(self)
         self.state_of_charge_pct = None
         self.energy_stored = 0.0
 
@@ -231,3 +235,59 @@ class Battery(CompleteDevice):
             logger.info(f"{self.device_name} percentage: {self.state_of_charge_pct} %")
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
+
+
+class DeviceSchedulePolicy:
+    """
+    Data class for fields determining the properties of the variables used when scheduling devices based on power forecasts.
+    """
+
+    def __init__(self, device: CompleteDevice) -> None:
+        self.device = device
+        self.schedule_lower: float
+        self.schedule_upper: float
+        self.schedule_variable_cat: VariableCategory
+        self.energy_stored_lower: float
+        self.energy_stored_upper: float
+        self.diff_lower: float
+        self.diff_upper: float
+        self.diff_variable_cat: VariableCategory
+
+
+class BatterySchedulePolicy(DeviceSchedulePolicy):
+    """
+    Class for fields determining the properties of the variables used when scheduling batteries based on power forecasts.
+    """
+
+    def __init__(self, device: Battery) -> None:
+        super().__init__(device)
+        self.schedule_lower = -1.0
+        self.schedule_upper = 1.0
+        self.schedule_variable_cat: VariableCategory = VariableCategory.CONTINUOUS
+        self.energy_stored_lower: float = 0.0
+        self.energy_stored_upper: float = device.energy_capacity
+        self.diff_lower: float = -2.0
+        self.diff_upper: float = 2.0
+        self.diff_variable_cat: VariableCategory = VariableCategory.CONTINUOUS
+
+
+class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
+    """
+    Class for fields determining the properties of the variables used when scheduling sockets based on power forecasts.
+    """
+
+    def __init__(self, device: SocketDevice, delta_t: int | float) -> None:
+        super().__init__(device)
+        self.schedule_lower = 0.0
+        self.schedule_upper = 1.0
+        self.schedule_variable_cat: VariableCategory = VariableCategory.BINARY
+        self.energy_stored_lower: float = 0.0
+        self.energy_stored_upper: float = (
+            device.energy_capacity + 0.9 * device.max_power_usage * delta_t
+        )
+        self.energy_considered_full: float = (
+            device.energy_capacity - 0.1 * device.max_power_usage * delta_t
+        )
+        self.diff_lower: float = -1.0
+        self.diff_upper: float = 1.0
+        self.diff_variable_cat: VariableCategory = VariableCategory.INTEGER

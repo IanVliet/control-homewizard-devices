@@ -21,15 +21,15 @@ from pulp import (
 def schedule_devices(
     df_power: pd.DataFrame,
     socket_and_battery_list: list[SocketDevice | Battery],
-    delta_t_sec: int = 30,
+    delta_t: float = 0.25,
 ):
     new_datetime_index = pd.date_range(
-        start=df_power.index[0], end=df_power.index[-1], freq=f"{delta_t_sec}s"
+        start=df_power.index[0], end=df_power.index[-1], freq=f"{delta_t}h"
     )
-    delta_t = delta_t_sec / 3600  # convert to hours such that the energy is in kWh
+    # delta_t = delta_t_sec / 3600  # convert to hours such that the energy is in kWh
 
     # create the problem to be optimized
-    prob = LpProblem("Device_Scheduling_Optimization", LpMinimize)
+    prob = LpProblem("DeviceSchedulingOptimization", LpMinimize)
 
     df_power_interpolated = df_power.reindex(new_datetime_index).interpolate(
         method="time"
@@ -39,21 +39,29 @@ def schedule_devices(
 
     # Variables (with their limits)
     # in schedule: a device with -1 provides power (e.g. a battery discharging), 0 a device does nothing, 1 a device consumes power
-    # TODO: The batteries can charge and discharge up to their max power, but can also do in between, therefore we should turn LpInteger into LpContinuous.
+    # The batteries can charge and discharge up to their max power, but can also do in between, therefore we should turn LpInteger into LpContinuous.
     schedule = {
         (device.device_name, t): LpVariable(
             f"O_{device.device_name}_{t}",
-            -1,
-            1,
-            cat=LpContinuous if isinstance(device, Battery) else LpInteger,
+            device.policy.schedule_lower,
+            device.policy.schedule_upper,
+            cat=device.policy.schedule_variable_cat.value,
         )
         for device in socket_and_battery_list
         for t in range(number_timesteps)
     }
     # Energy stored
+    # The devices connected through the sockets often stop using power when they are full,
+    # so we allow them to overcharge for up to 0.9 of the extra power consumed during a time step.
+    # We compensate by only requiring needed devices to be charged to their energy capacity minus 0.1 * max_power_usage * delta_t.
+    # If we did not use the 0.9 and 0.1, the devices would be overcharged an for an entire extra step if the capacity and storage matched perfectly.
+    # TODO: Consider batteries and sockets separately, since batteries are continuos and can therefore charge perfectly to the maximum capacity, and do not need the 0.9 factor.
     E_s = {
         (device.device_name, t): LpVariable(
-            f"E_s_{device.device_name}_{t}", 0, device.energy_capacity
+            f"E_s_{device.device_name}_{t}",
+            device.policy.energy_stored_lower,
+            device.policy.energy_stored_upper,
+            cat=LpContinuous,
         )
         for device in socket_and_battery_list
         for t in range(number_timesteps)
@@ -74,8 +82,10 @@ def schedule_devices(
             schedule[device.device_name, t] * device.max_power_usage
             for device in socket_and_battery_list
         )
-        prob += P_l[t] <= z
         prob += -P_l[t] <= z
+        # Add a constraint that ensures the available power is not larger than the predicted power (battery cannot discharge into the grid).
+        prob += P_l[t] <= P_p[t]
+    prob += lpSum(P_l[t] for t in range(number_timesteps)) / number_timesteps <= z
 
     for device in socket_and_battery_list:
         for t in range(number_timesteps):
@@ -92,24 +102,14 @@ def schedule_devices(
                     + schedule[device.device_name, t] * device.max_power_usage * delta_t
                 )
 
-            prob += E_s[device.device_name, t] <= device.energy_capacity
-            prob += E_s[device.device_name, t] >= 0
-
-            # Non-needed devices can't charge when power is negative
-            # if not socket.daily_need:
-            #     prob += schedule[socket.device_name, t] >= 0  # no discharging
-
-        # Final energy requirement
+        # Final energy requirement for needed devices:
+        # The device does not need to be fully charged, but it should be close.
+        # Since we allow overcharging by 0.9 * max_power_usage * delta_t, we set the requirement to energy_capacity - 0.1 * max_power_usage * delta_t.
         if isinstance(device, SocketDevice) and device.daily_need:
             prob += (
-                E_s[device.device_name, number_timesteps - 1] >= device.energy_capacity
+                E_s[device.device_name, number_timesteps - 1]
+                >= device.policy.energy_considered_full
             )
-
-    # Device control limits (sockets can only consume power or do nothing)
-    for device in socket_and_battery_list:
-        if isinstance(device, SocketDevice):
-            for t in range(number_timesteps):
-                prob += schedule[device.device_name, t] >= 0  # only 0 or 1
 
     # Solve the problem
     prob.solve()
@@ -125,7 +125,10 @@ def schedule_devices(
     }
     diff = {
         (device.device_name, t): LpVariable(
-            f"diff_{device.device_name}_{t}", -2, 2, cat=LpInteger
+            f"diff_{device.device_name}_{t}",
+            device.policy.diff_lower,
+            device.policy.diff_upper,
+            cat=device.policy.diff_variable_cat.value,
         )
         for device in socket_and_battery_list
         for t in range(number_timesteps - 1)
@@ -138,8 +141,14 @@ def schedule_devices(
                 diff[device.device_name, t]
                 == schedule[device.device_name, t + 1] - schedule[device.device_name, t]
             )
-            prob += diff[device.device_name, t] <= 2 * switches[device.device_name, t]
-            prob += -diff[device.device_name, t] <= 2 * switches[device.device_name, t]
+            prob += (
+                diff[device.device_name, t]
+                <= device.policy.diff_upper * switches[device.device_name, t]
+            )
+            prob += (
+                -diff[device.device_name, t]
+                <= -device.policy.diff_lower * switches[device.device_name, t]
+            )
 
     prob.setObjective(
         lpSum(
@@ -155,8 +164,8 @@ def schedule_devices(
     prob.setObjective(
         lpSum(
             t * schedule[device.device_name, t]
-            for device in socket_and_battery_list
             for t in range(number_timesteps)
+            for device in socket_and_battery_list
         )
     )
     prob.solve()
