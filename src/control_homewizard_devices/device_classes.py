@@ -14,7 +14,7 @@ class CompleteDevice:
     Class for all properties of the device
     """
 
-    def __init__(self, ip_address, device_type, device_name, **kwargs):
+    def __init__(self, ip_address: str, device_type: str, device_name: str, **kwargs):
         self._ip_address = ip_address
         self._device_type = device_type
         self._device_name = device_name
@@ -91,6 +91,7 @@ class SocketDevice(CompleteDevice):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self._max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
+        # TODO: Reconsider whether the class needs priority or not
         self.priority = priority
         self.daily_need = daily_need
         # the (instantaneous) attributes that change due to each measurement
@@ -203,7 +204,7 @@ class Battery(CompleteDevice):
         self._token = self._user_info.token
 
         self.state_of_charge_pct = None
-        self.stored_energy = None
+        self.energy_stored = 0.0
 
     @property
     def hwe_device(self):
@@ -222,7 +223,7 @@ class Battery(CompleteDevice):
             self.inst_power_usage = measurement.power_w
             self.state_of_charge_pct = measurement.state_of_charge_pct
             if self.state_of_charge_pct:
-                self.stored_energy = (
+                self.energy_stored = (
                     self.energy_capacity * self.state_of_charge_pct / 100
                 )
             # log the power and current
