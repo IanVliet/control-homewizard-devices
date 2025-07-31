@@ -5,7 +5,9 @@ from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
 )
-from control_homewizard_devices.power_forecast import schedule_devices
+from control_homewizard_devices.power_forecast import (
+    DeviceSchedulingOptimization,
+)
 import control_homewizard_devices.device_classes as device_classes
 
 DELTA_T_TEST = 0.25  # 15 minutes in hours
@@ -48,6 +50,16 @@ def power_0_5kw_and_1kw(datetimes_delta_t):
     return pd.DataFrame({"power_kw": [0.5, 0.5, 1, 1]}, index=datetimes_delta_t)
 
 
+@pytest.fixture(scope="module")
+def power_ascending(datetimes_delta_t):
+    return pd.DataFrame({"power_kw": [0.5, 0.75, 1, 1.25]}, index=datetimes_delta_t)
+
+
+@pytest.fixture(scope="module")
+def power_descending(datetimes_delta_t):
+    return pd.DataFrame({"power_kw": [1.25, 1, 0.75, 0.5]}, index=datetimes_delta_t)
+
+
 # Tests to ensure a device is turned on when there is enough power.
 def test_single_device_only_on_needed(power_1kw):
     """
@@ -56,7 +68,8 @@ def test_single_device_only_on_needed(power_1kw):
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, True)
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -72,7 +85,8 @@ def test_single_socket_only_on_optional(power_1kw):
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, False)
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -95,7 +109,8 @@ def test_single_battery_only_on(power_1kw):
             {"name": "test_user", "token": ""},
         )
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -112,7 +127,8 @@ def test_single_device_on_and_off(power_1kw):
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice("", "HWE-SKT", "test socket", 1000, 500, 1, True)
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -136,7 +152,8 @@ def test_charge_battery_until_full(power_1kw):
             {"name": "test_user", "token": ""},
         )
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -156,9 +173,8 @@ def test_schedule_second_device_only(power_0_5kw_and_1kw):
         SocketDevice("", "HWE-SKT", "test socket low power", 500, 250, 2, False),
         SocketDevice("", "HWE-SKT", "test socket high power", 1000, 1000, 1, True),
     ]
-    df_schedules = schedule_devices(
-        power_0_5kw_and_1kw, devices_list, device_classes.DELTA_T
-    )
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         0,
         0,
@@ -185,9 +201,8 @@ def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
         SocketDevice("", "HWE-SKT", "test socket low power", 500, 250, 2, False),
         SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 1, True),
     ]
-    df_schedules = schedule_devices(
-        power_0_5kw_and_1kw, devices_list, device_classes.DELTA_T
-    )
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -214,9 +229,8 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
         SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 2, True),
     ]
     # TODO: Optionally make schedule devices be influenced by priority... (Sort devices by priority?)
-    df_schedules = schedule_devices(
-        power_0_5kw_and_1kw, devices_list, device_classes.DELTA_T
-    )
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -240,12 +254,18 @@ def test_schedule_battery_charge_second_device_charge(power_1kw):
         "", "HWE-SKT", "test socket high power", 2000, 1000, 1, True
     )
     test_battery = Battery(
-        "", "HWE-BAT", "test battery", 1000, 4000, {"name": "test_user", "token": ""}
+        "",
+        "HWE-BAT",
+        "test battery",
+        1000,
+        4000,
+        {"name": "test_user", "token": ""},
     )
     socket_and_battery_list: list[SocketDevice | Battery] = [test_socket, test_battery]
-    df_schedules = schedule_devices(
-        power_1kw, socket_and_battery_list, device_classes.DELTA_T
+    optimization = DeviceSchedulingOptimization(
+        socket_and_battery_list, device_classes.DELTA_T
     )
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     # expects switching between states to occur as little as possible (so 0, 0, 1, 1 instead of 0, 1, 0, 1 for the socket)
     assert df_schedules[
         f"schedule {socket_and_battery_list[0].device_name}"
@@ -265,9 +285,8 @@ def test_insufficient_power_for_activation_two_needed_devices(power_0_5kw_and_1k
         SocketDevice("", "HWE-SKT", "test socket low power", 1000, 500, 1, True),
         SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 2, True),
     ]
-    df_schedules = schedule_devices(
-        power_0_5kw_and_1kw, devices_list, device_classes.DELTA_T
-    )
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -282,19 +301,44 @@ def test_insufficient_power_for_activation_two_needed_devices(power_0_5kw_and_1k
     ]
 
 
-# TODO: Create test for checking if maximum capacity of batteries is taken into account properly.
+# Tests for checking if maximum capacity of devices is taken into account properly.
+def test_maximum_capacity_of_battery(power_1kw):
+    """
+    The battery should not be scheduled to turn on for the entire duration, because it cannot store all energy.
+    However, it should charge to its maximum capacity by using a ratio in the schedule.
+    (In practice the battery will use full power until it reaches its maximum capacity.)
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        Battery(
+            "",
+            "HWE-BAT",
+            "test battery",
+            1000,
+            600,
+            {"name": "test_user", "token": ""},
+        )
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        0.4,
+        0,
+    ]
 
 
-# TODO: Create test for checking if maximum capacity of sockets is taken into account properly.
-def test_maximum_capacity_of_sockets(power_1kw):
+def test_maximum_storage_of_sockets(power_1kw):
     """
     The socket should not be scheduled to turn on for the entire duration, because it cannot store all energy.
-    However, it should charge to its maximum capacity. (Since in practice the device will stop consuming power when it reaches its maximum capacity.)
+    However, it should charge to its maximum capacity by overcharging for one extra step.
+    (In practice the device will stop consuming power when it reaches its maximum capacity.)
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice("", "HWE-SKT", "test socket", 1000, 600, 1, True)
     ]
-    df_schedules = schedule_devices(power_1kw, devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -303,9 +347,43 @@ def test_maximum_capacity_of_sockets(power_1kw):
     ]
 
 
-# TODO: Create test for cases of not perfectly matching available power with the capacity of the devices.
+# TODO: Create test for cases of not perfectly matching available power with the power usage of the devices.
+def test_not_perfectly_matching_power(power_1kw):
+    """
+    The socket should only be turned on for the first part
+    of the prediction, because it cannot store all the available energy.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice("", "HWE-SKT", "test socket", 900, 450, 1, True)
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_1kw)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        0,
+        0,
+    ]
+
 
 # TODO: Create test for cases where an optional device cannot be fully charged, but is still charged as much as possible.
+def test_optional_device_not_fully_charged(power_descending):
+    """
+    The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
+    because there is not enough power available in later stages.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, False)
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_descending)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        0,
+        0,
+    ]
+
 
 # TODO: Create test for cases where a needed device cannot be fully charged, but is still charged as much as possible.
 
