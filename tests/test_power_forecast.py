@@ -42,7 +42,7 @@ def datetimes_delta_t():
 
 @pytest.fixture(scope="module")
 def power_1kw(datetimes_delta_t):
-    return pd.DataFrame({"power_kw": [1, 1, 1, 1]}, index=datetimes_delta_t)
+    return pd.DataFrame({"power_kw": [1] * 4}, index=datetimes_delta_t)
 
 
 @pytest.fixture(scope="module")
@@ -58,6 +58,20 @@ def power_ascending(datetimes_delta_t):
 @pytest.fixture(scope="module")
 def power_descending(datetimes_delta_t):
     return pd.DataFrame({"power_kw": [1.25, 1, 0.75, 0.5]}, index=datetimes_delta_t)
+
+
+@pytest.fixture(scope="module")
+def datetimes_2_delta_t():
+    return pd.date_range(
+        start="2025-01-01 09:00",
+        periods=4,
+        freq=f"{2 * DELTA_T_TEST}h",
+    )
+
+
+@pytest.fixture(scope="module")
+def power_1kw_2_delta_t(datetimes_2_delta_t):
+    return pd.DataFrame({"power_kw": [1, 1, 1, 1]}, index=datetimes_2_delta_t)
 
 
 # Tests to ensure a device is turned on when there is enough power.
@@ -106,6 +120,7 @@ def test_single_battery_only_on(power_1kw):
             "test battery",
             1000,
             1000,
+            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -149,6 +164,7 @@ def test_charge_battery_until_full(power_1kw):
             "test battery",
             1000,
             500,
+            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -259,6 +275,7 @@ def test_schedule_battery_charge_second_device_charge(power_1kw):
         "test battery",
         1000,
         4000,
+        2,
         {"name": "test_user", "token": ""},
     )
     socket_and_battery_list: list[SocketDevice | Battery] = [test_socket, test_battery]
@@ -279,11 +296,11 @@ def test_schedule_battery_charge_second_device_charge(power_1kw):
 def test_insufficient_power_for_activation_two_needed_devices(power_0_5kw_and_1kw):
     """
     Although both devices are needed, the devices should not be on at the same time since there is not enough power.
-    However, the devices should still not activate at the same time.
+    If it does not influence the power balance the devices should be in the same state as long as possible (on until full, then off).
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket low power", 1000, 500, 1, True),
-        SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 2, True),
+        SocketDevice("", "HWE-SKT", "1st test socket", 1000, 500, 1, True),
+        SocketDevice("", "HWE-SKT", "2nd test socket", 1000, 500, 2, True),
     ]
     optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
     df_schedules = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
@@ -315,6 +332,7 @@ def test_maximum_capacity_of_battery(power_1kw):
             "test battery",
             1000,
             600,
+            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -386,8 +404,47 @@ def test_optional_device_not_fully_charged(power_descending):
 
 
 # TODO: Create test for cases where a needed device cannot be fully charged, but is still charged as much as possible.
+def test_needed_device_not_fully_charged(power_ascending):
+    """
+    The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
+    because there is not enough power available in later stages.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice("", "HWE-SKT", "test socket", 1000, 2000, 1, True)
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_ascending)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        1,
+        1,
+    ]
+
 
 # TODO: Create tests which consider the use of interpolation (so different delta_t for schedule devices than for the power forecast).
+def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t):
+    """
+    The socket should be scheduled to turn on for the first three steps only, resulting in the device being perfectly charged,
+    because there is enough power available and the timestep of delta_t_test/2 doubles the number of timesteps.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice("", "HWE-SKT", "test socket", 1000, 750, 1, True)
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
+    df_schedules = optimization.solve_schedule_devices(power_1kw_2_delta_t)
+    # print(power_1kw_2_delta_t)
+    # print(df_schedules)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+    ]
+
 
 # TODO: Implement logic to substract a constant from the prediced power based on the difference between predicted power from solar
 # and the actual available power at the current moment due to e.g. other devices or inaccurate prediction of available solar.

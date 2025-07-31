@@ -197,12 +197,16 @@ class Battery(CompleteDevice):
         device_name: str,
         max_power_usage: int | float,
         energy_capacity: int | float,
+        priority: int,
         user_info: dict[str, str],
         **kwargs,
     ):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self.max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
+        self.priority = priority
+        # Batteries do not have a daily need (they never draw from the grid)
+        self.daily_need = False
         self._user_info = UserInfo(**user_info)
         self._token = self._user_info.token
 
@@ -282,11 +286,15 @@ class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
         self.schedule_upper = 1.0
         self.schedule_variable_cat: VariableCategory = VariableCategory.BINARY
         self.energy_stored_lower: float = 0.0
+        energy_stored_buffer_upper: float = 0.9 * device.max_power_usage * delta_t
+        energy_stored_buffer_lower: float = (
+            device.max_power_usage * delta_t - energy_stored_buffer_upper
+        )
         self.energy_stored_upper: float = (
-            device.energy_capacity + 0.9 * device.max_power_usage * delta_t
+            device.energy_capacity + energy_stored_buffer_upper
         )
         self.energy_considered_full: float = (
-            device.energy_capacity - 0.1 * device.max_power_usage * delta_t
+            device.energy_capacity - energy_stored_buffer_lower
         )
         self.diff_lower: float = -1.0
         self.diff_upper: float = 1.0
