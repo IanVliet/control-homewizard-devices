@@ -365,7 +365,7 @@ def test_maximum_storage_of_sockets(power_1kw):
     ]
 
 
-# TODO: Create test for cases of not perfectly matching available power with the power usage of the devices.
+# Test for cases of not perfectly matching available power with the power usage of the devices.
 def test_not_perfectly_matching_power(power_1kw):
     """
     The socket should only be turned on for the first part
@@ -384,7 +384,7 @@ def test_not_perfectly_matching_power(power_1kw):
     ]
 
 
-# TODO: Create test for cases where an optional device cannot be fully charged, but is still charged as much as possible.
+# Test for cases where an optional device cannot be fully charged, but is still charged as much as possible.
 def test_optional_device_not_fully_charged(power_descending):
     """
     The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
@@ -403,7 +403,33 @@ def test_optional_device_not_fully_charged(power_descending):
     ]
 
 
-# TODO: Create test for cases where a needed device cannot be fully charged, but is still charged as much as possible.
+def test_devices_out_of_order_due_to_power(power_descending):
+    """
+    The first socket should be scheduled to turn on for the first two steps and the second socket for the last two steps,
+    since this results in the least amount of power needing to go to the grid.
+    It should go in this order, despite the first socket having a lower priority.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice("", "HWE-SKT", "test socket", 1000, 500, 2, True),
+        SocketDevice("", "HWE-SKT", "test socket 2", 500, 250, 1, True),
+    ]
+    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    df_schedules = optimization.solve_schedule_devices(power_descending)
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        1,
+        1,
+        0,
+        0,
+    ]
+    assert df_schedules[f"schedule {devices_list[1].device_name}"].to_list() == [
+        0,
+        0,
+        1,
+        1,
+    ]
+
+
+# Test for a case where a needed device cannot be fully charged, but is still charged as much as possible. Without resulting in the problem being infeasible.
 def test_needed_device_not_fully_charged(power_ascending):
     """
     The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
@@ -422,7 +448,7 @@ def test_needed_device_not_fully_charged(power_ascending):
     ]
 
 
-# TODO: Create tests which consider the use of interpolation (so different delta_t for schedule devices than for the power forecast).
+# test which considers the use of interpolation (so different delta_t for schedule devices than for the power forecast).
 def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t):
     """
     The socket should be scheduled to turn on for the first three steps only, resulting in the device being perfectly charged,
