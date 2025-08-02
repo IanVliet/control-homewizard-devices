@@ -7,8 +7,17 @@ from control_homewizard_devices.schedule_devices_pulp import (
 )
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from pathlib import Path
+import argparse
 
 DELTA_T_BENCHMARK = 0.25  # 15 minutes in hours
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--debug-scheduler",
+    action="store_true",
+    help="Enable debug output for the scheduler related tests",
+)
+args = parser.parse_args()
 
 
 def get_power_dataframe(size: int, power_kw=1) -> pd.DataFrame:
@@ -90,13 +99,14 @@ def run_benchmark():
         power_df = get_solar_prediction_dataframe(size)
         start = time.time()
         optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_BENCHMARK)
-        df_schedules = optimization.solve_schedule_devices(power_df, time_limit=10)
+        results = optimization.solve_schedule_devices(power_df, time_limit=10)
         end = time.time()
         scheduling_time = end - start
-        print(f"Scheduling took {scheduling_time} seconds")
+        print(f"Scheduling with size {size} took {scheduling_time:3f} seconds")
         if scheduling_time > 10:
             print(f"Scheduling took too long, max data size {size}.")
-            # print(df_schedules)
+            if args.debug_scheduler:
+                optimization.print_results(results)
             break
         size *= data_multiplier
         if size > 200:
