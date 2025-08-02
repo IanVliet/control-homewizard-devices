@@ -88,12 +88,13 @@ class SocketDevice(CompleteDevice):
         energy_capacity: int | float,
         priority: int,
         daily_need: bool,
+        delta_t: int | float = DELTA_T,
         **kwargs,
     ):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self._max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
-        self.policy = SocketDeviceSchedulePolicy(self, DELTA_T)
+        self.policy = SocketDeviceSchedulePolicy(self, delta_t)
         # TODO: Reconsider whether the class needs priority or not
         self.priority = priority
         self.daily_need = daily_need

@@ -13,11 +13,6 @@ import control_homewizard_devices.device_classes as device_classes
 DELTA_T_TEST = 0.25  # 15 minutes in hours
 
 
-@pytest.fixture(scope="session")
-def solar_prediction_data():
-    df_solar_prediction = pd.read_parquet("../data/solar_prediction.parquet")
-
-
 @pytest.fixture(autouse=True)
 def patch_delta_t(monkeypatch):
     monkeypatch.setattr(

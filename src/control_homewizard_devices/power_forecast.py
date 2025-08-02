@@ -139,7 +139,9 @@ class DeviceSchedulingOptimization:
         z = LpVariable("z")
         return schedules, E_s, grid_mode, grid_draw, grid_feed, missing_energy, z
 
-    def solve_schedule_devices(self, df_power: pd.DataFrame):
+    def solve_schedule_devices(
+        self, df_power: pd.DataFrame, time_limit: int = 60
+    ) -> pd.DataFrame:
         """
         Solve the scheduling problem for devices that need to be charged.
         """
@@ -220,9 +222,8 @@ class DeviceSchedulingOptimization:
                     + missing_energy[device.device_name]
                     >= device.policy.energy_considered_full
                 )
-
         # Solve the problem
-        prob.solve(PULP_CBC_CMD(msg=False))
+        prob.solve(PULP_CBC_CMD(msg=False, timeLimit=time_limit))
         opt_power_balance_value = value(prob.objective)
 
         # Print results
@@ -238,8 +239,8 @@ class DeviceSchedulingOptimization:
             energy_stored=E_s,
             missing_energy=missing_energy,
         )
-        print("Initial optimization results:")
-        self.print_results(first_result)
+        # print("Initial optimization results:")
+        # self.print_results(first_result)
         if opt_power_balance_value is None:
             raise ValueError("The optimization problem could not be solved.")
         # Solve the secondary objective of minimizing the number of times sockets are switched on/off
@@ -287,7 +288,7 @@ class DeviceSchedulingOptimization:
             for device in self.socket_list
         )
         prob.setObjective(number_switches)
-        prob.solve(PULP_CBC_CMD(msg=False))
+        prob.solve(PULP_CBC_CMD(msg=False, timeLimit=time_limit))
         opt_number_switches = value(prob.objective)
         # Print results
         second_result = ScheduleResult(
@@ -302,8 +303,8 @@ class DeviceSchedulingOptimization:
             energy_stored=E_s,
             missing_energy=missing_energy,
         )
-        print("Secondary optimization results:")
-        self.print_results(second_result)
+        # print("Secondary optimization results:")
+        # self.print_results(second_result)
 
         # Solve the thirtiary objective of ensuring that devices are turned on as early as possible,
         # with device priority: lower priority number means higher priority (should be turned on earlier).
@@ -321,7 +322,8 @@ class DeviceSchedulingOptimization:
                 for device in self.socket_and_battery_list
             )
         )
-        prob.solve(PULP_CBC_CMD(msg=False))
+        prob.solve(PULP_CBC_CMD(msg=False, timeLimit=time_limit))
+        # prob.solve(PULP_CBC_CMD(msg=False))
 
         # Update the DataFrame with the schedules
         df_power_interpolated = self.update_dataframe(schedule, df_power_interpolated)
