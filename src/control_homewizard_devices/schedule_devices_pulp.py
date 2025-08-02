@@ -135,13 +135,13 @@ class DeviceSchedulingOptimization:
 
     def solve_schedule_devices(
         self, df_power: pd.DataFrame, time_limit: int = 60
-    ) -> pd.DataFrame:
+    ) -> list[ScheduleResult]:
         """
         Solve the scheduling problem for devices that need to be charged.
         """
         # create the problem to be optimized
         prob = LpProblem("DeviceSchedulingOptimization", LpMinimize)
-
+        results: list[ScheduleResult] = []
         df_power_interpolated, P_p, number_timesteps = self.preprocess_power_data(
             df_power
         )
@@ -220,21 +220,22 @@ class DeviceSchedulingOptimization:
         prob.solve(PULP_CBC_CMD(msg=False, timeLimit=time_limit))
         opt_power_balance_value = value(prob.objective)
 
-        # Print results
-        first_result = ScheduleResult(
-            df_power_interpolated=df_power_interpolated,
-            prob=prob,
-            combined_main_objective=combined_main_objective,
-            number_timesteps=number_timesteps,
-            grid_draw=grid_draw,
-            grid_feed=grid_feed,
-            P_p=P_p,
-            schedule=schedule,
-            energy_stored=E_s,
-            missing_energy=missing_energy,
+        # Add result to all results
+        results.append(
+            ScheduleResult(
+                df_power_interpolated=df_power_interpolated,
+                prob=prob,
+                combined_main_objective=combined_main_objective,
+                number_timesteps=number_timesteps,
+                grid_draw=grid_draw,
+                grid_feed=grid_feed,
+                P_p=P_p,
+                schedule=schedule,
+                energy_stored=E_s,
+                missing_energy=missing_energy,
+            )
         )
-        # print("Initial optimization results:")
-        # self.print_results(first_result)
+
         if opt_power_balance_value is None:
             raise ValueError("The optimization problem could not be solved.")
         # Solve the secondary objective of minimizing the number of times sockets are switched on/off
@@ -284,21 +285,21 @@ class DeviceSchedulingOptimization:
         prob.setObjective(number_switches)
         prob.solve(PULP_CBC_CMD(msg=False, timeLimit=time_limit))
         opt_number_switches = value(prob.objective)
-        # Print results
-        second_result = ScheduleResult(
-            df_power_interpolated=df_power_interpolated,
-            prob=prob,
-            combined_main_objective=combined_main_objective,
-            number_timesteps=number_timesteps,
-            grid_draw=grid_draw,
-            grid_feed=grid_feed,
-            P_p=P_p,
-            schedule=schedule,
-            energy_stored=E_s,
-            missing_energy=missing_energy,
+        # Add result to all results
+        results.append(
+            ScheduleResult(
+                df_power_interpolated=df_power_interpolated,
+                prob=prob,
+                combined_main_objective=combined_main_objective,
+                number_timesteps=number_timesteps,
+                grid_draw=grid_draw,
+                grid_feed=grid_feed,
+                P_p=P_p,
+                schedule=schedule,
+                energy_stored=E_s,
+                missing_energy=missing_energy,
+            )
         )
-        # print("Secondary optimization results:")
-        # self.print_results(second_result)
 
         # Solve the thirtiary objective of ensuring that devices are turned on as early as possible,
         # with device priority: lower priority number means higher priority (should be turned on earlier).
@@ -323,21 +324,22 @@ class DeviceSchedulingOptimization:
         df_power_interpolated = self.update_dataframe(schedule, df_power_interpolated)
 
         # Print results
-        final_result = ScheduleResult(
-            df_power_interpolated=df_power_interpolated,
-            prob=prob,
-            combined_main_objective=combined_main_objective,
-            number_timesteps=number_timesteps,
-            grid_draw=grid_draw,
-            grid_feed=grid_feed,
-            P_p=P_p,
-            schedule=schedule,
-            energy_stored=E_s,
-            missing_energy=missing_energy,
+        results.append(
+            ScheduleResult(
+                df_power_interpolated=df_power_interpolated,
+                prob=prob,
+                combined_main_objective=combined_main_objective,
+                number_timesteps=number_timesteps,
+                grid_draw=grid_draw,
+                grid_feed=grid_feed,
+                P_p=P_p,
+                schedule=schedule,
+                energy_stored=E_s,
+                missing_energy=missing_energy,
+            )
         )
-        self.print_results(final_result)
 
-        return df_power_interpolated
+        return results
 
     def update_dataframe(
         self,
@@ -355,7 +357,7 @@ class DeviceSchedulingOptimization:
                 ] = value(schedule[device.device_name, t])
         return df_power_interpolated
 
-    def print_results(self, result: ScheduleResult):
+    def print_results(self, results: list[ScheduleResult]):
         """
         Print the results of the optimization.
         """
@@ -365,35 +367,34 @@ class DeviceSchedulingOptimization:
             + [f"Schedule {d.device_name}" for d in self.socket_and_battery_list]
             + [f"E_s {d.device_name}" for d in self.socket_and_battery_list]
         )
+        for result in results:
+            data = []
+            for t in range(result.number_timesteps):
+                row = [
+                    t,
+                    result.P_p[t],
+                    value(result.grid_draw[t]),
+                    value(result.grid_feed[t]),
+                ]
+                # Schedules
+                row += [
+                    value(result.schedule.get((device.device_name, t), 0.0))
+                    for device in self.socket_and_battery_list
+                ]
+                # Energy stored
+                row += [
+                    value(result.energy_stored.get((device.device_name, t), 0.0))
+                    for device in self.socket_and_battery_list
+                ]
+                data.append(row)
 
-        data = []
-        for t in range(result.number_timesteps):
-            row = [
-                t,
-                result.P_p[t],
-                value(result.grid_draw[t]),
-                value(result.grid_feed[t]),
-            ]
-            # Schedules
-            row += [
-                value(result.schedule.get((device.device_name, t), 0.0))
-                for device in self.socket_and_battery_list
-            ]
-            # Energy stored
-            row += [
-                value(result.energy_stored.get((device.device_name, t), 0.0))
-                for device in self.socket_and_battery_list
-            ]
-            data.append(row)
+            df = pd.DataFrame(data, columns=columns)
+            print("Status:", LpStatus[result.prob.status])
+            print("Max imbalance:", value(result.combined_main_objective))
+            print(df.to_string(index=False, float_format="%.3f"))
 
-        df = pd.DataFrame(data, columns=columns)
-        print("Status:", LpStatus[result.prob.status])
-        print("Max imbalance:", value(result.combined_main_objective))
-        print(df.to_string(index=False, float_format="%.3f"))
-
-        for device in self.needed_socket_list:
-            print(
-                f"{device.device_name} has missing energy: {value(result.missing_energy[device.device_name]):.3f}"
-            )
-        print("Optimization finished")
-        print("Max imbalance:", value(result.combined_main_objective))
+            for device in self.needed_socket_list:
+                print(
+                    f"{device.device_name} has missing energy: {value(result.missing_energy[device.device_name]):.3f}"
+                )
+            print("Max imbalance:", value(result.combined_main_objective))
