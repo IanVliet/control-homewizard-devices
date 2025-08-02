@@ -7,22 +7,8 @@ from control_homewizard_devices.device_classes import (
 from control_homewizard_devices.schedule_devices_pulp import (
     DeviceSchedulingOptimization,
 )
-import control_homewizard_devices.device_classes as device_classes
 
 DELTA_T_TEST = 0.25  # 15 minutes in hours
-
-
-@pytest.fixture(autouse=True)
-def patch_delta_t(monkeypatch):
-    monkeypatch.setattr(
-        device_classes,
-        "DELTA_T",
-        DELTA_T_TEST,
-    )
-
-
-def test_override_delta_t_15min():
-    assert device_classes.DELTA_T == 0.25
 
 
 @pytest.fixture(scope="module")
@@ -74,9 +60,11 @@ def test_single_device_only_on_needed(power_1kw, request):
     All the devices should be scheduled to turn on, because there is enough power.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, True)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 1000, 1, True, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -94,9 +82,12 @@ def test_single_socket_only_on_optional(power_1kw, request):
     The socket should be scheduled to turn on for the entire duration, because there is enough power and the socket can store all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, False)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 1000, 1, False, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
+
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -124,7 +115,7 @@ def test_single_battery_only_on(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -143,9 +134,11 @@ def test_single_device_on_and_off(power_1kw, request):
     The socket should be scheduled to turn on at the beginning but not at the end, because there is enough power available, but the device cannot store all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 500, 1, True)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 500, 1, True, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -174,7 +167,7 @@ def test_charge_battery_until_full(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -195,10 +188,28 @@ def test_schedule_second_device_only(power_0_5kw_and_1kw, request):
     higher priority should be turned on for the entire duration.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket low power", 500, 250, 2, False),
-        SocketDevice("", "HWE-SKT", "test socket high power", 1000, 1000, 1, True),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket low power",
+            500,
+            250,
+            2,
+            False,
+            delta_t=DELTA_T_TEST,
+        ),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket high power",
+            1000,
+            1000,
+            1,
+            True,
+            delta_t=DELTA_T_TEST,
+        ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -226,10 +237,28 @@ def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
     The second device with larger capacity and higher priority should be turned on when the predicted available power is higher.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket low power", 500, 250, 2, False),
-        SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 1, True),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket low power",
+            500,
+            250,
+            2,
+            False,
+            delta_t=DELTA_T_TEST,
+        ),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket high power",
+            1000,
+            500,
+            1,
+            True,
+            delta_t=DELTA_T_TEST,
+        ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -256,11 +285,29 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
     Although both devices are needed, the devices should not be on at the same time since they can be on after each other.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket low power", 500, 250, 1, True),
-        SocketDevice("", "HWE-SKT", "test socket high power", 1000, 500, 2, True),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket low power",
+            500,
+            250,
+            1,
+            True,
+            delta_t=DELTA_T_TEST,
+        ),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket high power",
+            1000,
+            500,
+            2,
+            True,
+            delta_t=DELTA_T_TEST,
+        ),
     ]
     # TODO: Optionally make schedule devices be influenced by priority... (Sort devices by priority?)
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -285,7 +332,14 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
     First the battery should be turned on until enough energy is available such that second device can be charged.
     """
     test_socket = SocketDevice(
-        "", "HWE-SKT", "test socket high power", 2000, 1000, 1, True
+        "",
+        "HWE-SKT",
+        "test socket high power",
+        2000,
+        1000,
+        1,
+        True,
+        delta_t=DELTA_T_TEST,
     )
     test_battery = Battery(
         "",
@@ -297,9 +351,7 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
         {"name": "test_user", "token": ""},
     )
     socket_and_battery_list: list[SocketDevice | Battery] = [test_socket, test_battery]
-    optimization = DeviceSchedulingOptimization(
-        socket_and_battery_list, device_classes.DELTA_T
-    )
+    optimization = DeviceSchedulingOptimization(socket_and_battery_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -322,10 +374,14 @@ def test_insufficient_power_for_activation_two_needed_devices(
     If it does not influence the power balance the devices should be in the same state as long as possible (on until full, then off).
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "1st test socket", 1000, 500, 1, True),
-        SocketDevice("", "HWE-SKT", "2nd test socket", 1000, 500, 2, True),
+        SocketDevice(
+            "", "HWE-SKT", "1st test socket", 1000, 500, 1, True, delta_t=DELTA_T_TEST
+        ),
+        SocketDevice(
+            "", "HWE-SKT", "2nd test socket", 1000, 500, 2, True, delta_t=DELTA_T_TEST
+        ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -362,7 +418,7 @@ def test_maximum_capacity_of_battery(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -390,10 +446,10 @@ def test_maximum_storage_of_sockets(power_1kw, request):
             600,
             1,
             True,
-            delta_t=device_classes.DELTA_T,
+            delta_t=DELTA_T_TEST,
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -413,9 +469,11 @@ def test_not_perfectly_matching_power(power_1kw, request):
     of the prediction, because it cannot store all the available energy.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 900, 450, 1, True)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 900, 450, 1, True, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -435,9 +493,11 @@ def test_optional_device_not_fully_charged(power_descending, request):
     because there is not enough power available in later stages.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 1000, 1, False)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 1000, 1, False, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_descending)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -457,10 +517,14 @@ def test_devices_out_of_order_due_to_power(power_descending, request):
     It should go in this order, despite the first socket having a lower priority.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 500, 2, True),
-        SocketDevice("", "HWE-SKT", "test socket 2", 500, 250, 1, True),
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 500, 2, True, delta_t=DELTA_T_TEST
+        ),
+        SocketDevice(
+            "", "HWE-SKT", "test socket 2", 500, 250, 1, True, delta_t=DELTA_T_TEST
+        ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_descending)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -486,9 +550,11 @@ def test_needed_device_not_fully_charged(power_ascending, request):
     because there is not enough power available in later stages.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 2000, 1, True)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 2000, 1, True, delta_t=DELTA_T_TEST
+        )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, device_classes.DELTA_T)
+    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_ascending)
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
@@ -508,7 +574,9 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
     because there is enough power available and the timestep of delta_t_test/2 doubles the number of timesteps.
     """
     devices_list: list[SocketDevice | Battery] = [
-        SocketDevice("", "HWE-SKT", "test socket", 1000, 750, 1, True)
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 750, 1, True, delta_t=DELTA_T_TEST
+        )
     ]
     optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
     results = optimization.solve_schedule_devices(power_1kw_2_delta_t)
