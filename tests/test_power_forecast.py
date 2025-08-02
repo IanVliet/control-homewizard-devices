@@ -1,11 +1,10 @@
 import pytest
 import pandas as pd
 from control_homewizard_devices.device_classes import (
-    CompleteDevice,
     SocketDevice,
     Battery,
 )
-from control_homewizard_devices.power_forecast import (
+from control_homewizard_devices.schedule_devices_pulp import (
     DeviceSchedulingOptimization,
 )
 import control_homewizard_devices.device_classes as device_classes

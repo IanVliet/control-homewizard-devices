@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
 import time
-from control_homewizard_devices.power_forecast import DeviceSchedulingOptimization
+from control_homewizard_devices.schedule_devices_pulp import (
+    DeviceSchedulingOptimization,
+)
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from pathlib import Path
 
