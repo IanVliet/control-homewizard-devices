@@ -4,8 +4,12 @@ from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
 )
-from control_homewizard_devices.schedule_devices_pulp import (
-    DeviceSchedulingOptimization,
+
+# from control_homewizard_devices.schedule_devices_pulp import (
+#     DeviceSchedulingOptimizationPULP as DeviceSchedulingOptimization,
+# )
+from control_homewizard_devices.schedule_devices_scip import (
+    DeviceSchedulingOptimizationSCIP as DeviceSchedulingOptimization,
 )
 
 DELTA_T_TEST = 0.25  # 15 minutes in hours
@@ -423,12 +427,16 @@ def test_maximum_capacity_of_battery(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         optimization.print_results(results)
     df_schedules = results[-1].df_power_interpolated
-    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
-        1,
-        1,
-        0.4,
-        0,
-    ]
+    assert df_schedules[
+        f"schedule {devices_list[0].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            1,
+            1,
+            0.4,
+            0,
+        ]
+    )
 
 
 def test_maximum_storage_of_sockets(power_1kw, request):
