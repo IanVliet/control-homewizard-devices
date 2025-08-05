@@ -102,15 +102,17 @@ def run_benchmark():
         # power_df = get_power_dataframe(size)
         power_df = get_solar_prediction_dataframe(size)
         start = time.time()
-        optimization = DeviceSchedulingOptimizationSCIP(devices_list, DELTA_T_BENCHMARK)
-        results = optimization.solve_schedule_devices(power_df, time_limit=10)
+        optimization = DeviceSchedulingOptimizationSCIP(DELTA_T_BENCHMARK)
+        data, results = optimization.solve_schedule_devices(
+            power_df, devices_list, time_limit=10
+        )
         end = time.time()
         scheduling_time = end - start
         print(f"Scheduling with size {size} took {scheduling_time:3f} seconds")
         if scheduling_time > 10:
             print(f"Scheduling took too long, max data size {size}.")
             if args.debug_scheduler:
-                optimization.print_results(results)
+                optimization.print_results(data, results)
             break
         size *= data_multiplier
         if size > 200:

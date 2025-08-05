@@ -39,6 +39,7 @@ class ScheduleResultPULP:
     missing_energy: dict[str, LpVariable]
 
 
+# DECPRECATED!
 class DeviceSchedulingOptimizationPULP:
     """
     Class to handle the scheduling of devices based on power forecasts.

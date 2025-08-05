@@ -68,11 +68,12 @@ def test_single_device_only_on_needed(power_1kw, request):
             "", "HWE-SKT", "test socket", 1000, 1000, 1, True, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -90,12 +91,12 @@ def test_single_socket_only_on_optional(power_1kw, request):
             "", "HWE-SKT", "test socket", 1000, 1000, 1, False, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -119,11 +120,14 @@ def test_single_battery_only_on(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
+
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -142,11 +146,12 @@ def test_single_device_on_and_off(power_1kw, request):
             "", "HWE-SKT", "test socket", 1000, 500, 1, True, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
+
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -171,11 +176,12 @@ def test_charge_battery_until_full(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
+
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -213,11 +219,13 @@ def test_schedule_second_device_only(power_0_5kw_and_1kw, request):
             delta_t=DELTA_T_TEST,
         ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_0_5kw_and_1kw, devices_list
+    )
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         0,
         0,
@@ -262,11 +270,13 @@ def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
             delta_t=DELTA_T_TEST,
         ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_0_5kw_and_1kw, devices_list
+    )
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -311,11 +321,13 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
         ),
     ]
     # TODO: Optionally make schedule devices be influenced by priority... (Sort devices by priority?)
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_0_5kw_and_1kw, devices_list
+    )
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -354,19 +366,25 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
         2,
         {"name": "test_user", "token": ""},
     )
-    socket_and_battery_list: list[SocketDevice | Battery] = [test_socket, test_battery]
-    optimization = DeviceSchedulingOptimization(socket_and_battery_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    devices_list: list[SocketDevice | Battery] = [test_socket, test_battery]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     # expects switching between states to occur as little as possible (so 0, 0, 1, 1 instead of 0, 1, 0, 1 for the socket)
-    assert df_schedules[
-        f"schedule {socket_and_battery_list[0].device_name}"
-    ].to_list() == [0, 0, 1, 1]
-    assert df_schedules[
-        f"schedule {socket_and_battery_list[1].device_name}"
-    ].to_list() == [1, 1, -1, -1]
+    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+        0,
+        0,
+        1,
+        1,
+    ]
+    assert df_schedules[f"schedule {devices_list[1].device_name}"].to_list() == [
+        1,
+        1,
+        -1,
+        -1,
+    ]
 
 
 # Test if load is still spread out when there is not enough power available for both devices.
@@ -385,11 +403,13 @@ def test_insufficient_power_for_activation_two_needed_devices(
             "", "HWE-SKT", "2nd test socket", 1000, 500, 2, True, delta_t=DELTA_T_TEST
         ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_0_5kw_and_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_0_5kw_and_1kw, devices_list
+    )
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -422,11 +442,11 @@ def test_maximum_capacity_of_battery(power_1kw, request):
             {"name": "test_user", "token": ""},
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[
         f"schedule {devices_list[0].device_name}"
     ].to_list() == pytest.approx(
@@ -457,11 +477,11 @@ def test_maximum_storage_of_sockets(power_1kw, request):
             delta_t=DELTA_T_TEST,
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -481,11 +501,11 @@ def test_not_perfectly_matching_power(power_1kw, request):
             "", "HWE-SKT", "test socket", 900, 450, 1, True, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -505,11 +525,11 @@ def test_optional_device_not_fully_charged(power_descending, request):
             "", "HWE-SKT", "test socket", 1000, 1000, 1, False, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_descending)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_descending, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -532,11 +552,11 @@ def test_devices_out_of_order_due_to_power(power_descending, request):
             "", "HWE-SKT", "test socket 2", 500, 250, 1, True, delta_t=DELTA_T_TEST
         ),
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_descending)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_descending, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -562,11 +582,11 @@ def test_needed_device_not_fully_charged(power_ascending, request):
             "", "HWE-SKT", "test socket", 1000, 2000, 1, True, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_ascending)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_ascending, devices_list)
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -586,11 +606,13 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
             "", "HWE-SKT", "test socket", 1000, 750, 1, True, delta_t=DELTA_T_TEST
         )
     ]
-    optimization = DeviceSchedulingOptimization(devices_list, DELTA_T_TEST)
-    results = optimization.solve_schedule_devices(power_1kw_2_delta_t)
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_1kw_2_delta_t, devices_list
+    )
     if request.config.getoption("--debug-scheduler"):
-        optimization.print_results(results)
-    df_schedules = results[-1].df_power_interpolated
+        optimization.print_results(data, results)
+    df_schedules = data.df_power_interpolated
     # print(power_1kw_2_delta_t)
     # print(df_schedules)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
