@@ -8,9 +8,10 @@ from control_homewizard_devices.constants import (
     SCIP_BINARY,
     SCIP_CONTINUOUS,
 )
-from pyscipopt import Model, quicksum, Heur
+from pyscipopt import Model, quicksum, Heur, SCIP_RESULT, SCIP_HEURTIMING
 from typing import Any
 import numpy as np
+import heapq
 
 PHASE_NUMBER_TO_DESCRIPTION_MAP = {
     0: "Power imbalance",
@@ -26,8 +27,9 @@ class ScheduleData:
         delta_t: float,
         socket_and_battery_list: list[SocketDevice | Battery],
     ) -> None:
+        self.delta_t = delta_t
         self.df_power_interpolated, self.P_p, self.number_timesteps = (
-            self.preprocess_power_data(df_power, delta_t)
+            self.preprocess_power_data(df_power)
         )
         self.socket_and_battery_list = socket_and_battery_list
         self.socket_list = [
@@ -42,19 +44,19 @@ class ScheduleData:
             max(device.priority for device in socket_and_battery_list) + 1
         )
 
-    def preprocess_power_data(self, df_power: pd.DataFrame, delta_t: float):
+    def preprocess_power_data(self, df_power: pd.DataFrame):
         """
         Preprocess the power data by reindexing and interpolating.
         """
         new_datetime_index = pd.date_range(
             start=df_power.index.min(),
             end=df_power.index.max(),
-            freq=f"{delta_t}h",
+            freq=f"{self.delta_t}h",
         )
         df_power_interpolated = df_power.reindex(new_datetime_index).interpolate(
             method="time"
         )
-        P_p = (df_power_interpolated["power_kw"] * 1000).to_list()
+        P_p: list[float] = (df_power_interpolated["power_kw"] * 1000).to_list()
         number_timesteps = len(P_p)
         return df_power_interpolated, P_p, number_timesteps
 
@@ -288,6 +290,15 @@ class DeviceSchedulingOptimizationSCIP:
                     >= device.policy.energy_considered_full
                 )
 
+        # TODO: Fix heuristic (currently has problems with multiple aggregrate variables.)
+        # heuristic = GreedySchedulingHeuristic(self.variables, self.data)
+        # model.includeHeur(
+        #     heuristic,
+        #     name="GreedyScheduling",
+        #     desc="custom scheduling heuristic",
+        #     dispchar="Y",
+        # )
+
         # --- constraints for second objective ---
         # Constraints needed to be added earlier to prevent diff/switches my_variables from causing an infeasible solution.
         for device in self.data.socket_list:
@@ -391,54 +402,52 @@ class DeviceSchedulingOptimizationSCIP:
                 ] = model.getVal(schedule[device.device_name, t])
         return data.df_power_interpolated
 
-    def print_results(
-        self, schedule_data: ScheduleData, results: list[ScheduleResultSCIP]
-    ):
-        """
-        Print the results of the optimization.
-        """
-        # Prepare columns
-        columns = (
-            ["Time Step", "Available power (W)", "Grid Draw (W)", "Grid Feed (W)"]
-            + [
-                f"Schedule {d.device_name}"
-                for d in schedule_data.socket_and_battery_list
+
+def print_schedule_results(
+    schedule_data: ScheduleData, results: list[ScheduleResultSCIP]
+):
+    """
+    Print the results of the optimization.
+    """
+    # Prepare columns
+    columns = (
+        ["Time Step", "Available power (W)", "Grid Draw (W)", "Grid Feed (W)"]
+        + [f"Schedule {d.device_name}" for d in schedule_data.socket_and_battery_list]
+        + [f"E_s {d.device_name}" for d in schedule_data.socket_and_battery_list]
+    )
+    for phase_number, result in enumerate(results):
+        data = []
+        for t in range(schedule_data.number_timesteps):
+            row = [
+                t,
+                schedule_data.P_p[t],
+                result.grid_draw[t],
+                result.grid_feed[t],
             ]
-            + [f"E_s {d.device_name}" for d in schedule_data.socket_and_battery_list]
+            # Schedules
+            row += [
+                result.schedule.get((device.device_name, t), 0.0)
+                for device in schedule_data.socket_and_battery_list
+            ]
+            # Energy stored
+            row += [
+                result.energy_stored.get((device.device_name, t), 0.0)
+                for device in schedule_data.socket_and_battery_list
+            ]
+            data.append(row)
+
+        df = pd.DataFrame(data, columns=columns)
+        print("Status:", result.status)
+        print(
+            f"objective {PHASE_NUMBER_TO_DESCRIPTION_MAP[phase_number]}:",
+            result.objective_value,
         )
-        for phase_number, result in enumerate(results):
-            data = []
-            for t in range(schedule_data.number_timesteps):
-                row = [
-                    t,
-                    schedule_data.P_p[t],
-                    result.grid_draw[t],
-                    result.grid_feed[t],
-                ]
-                # Schedules
-                row += [
-                    result.schedule.get((device.device_name, t), 0.0)
-                    for device in schedule_data.socket_and_battery_list
-                ]
-                # Energy stored
-                row += [
-                    result.energy_stored.get((device.device_name, t), 0.0)
-                    for device in schedule_data.socket_and_battery_list
-                ]
-                data.append(row)
+        print(df.to_string(index=False, float_format="%.3f"))
 
-            df = pd.DataFrame(data, columns=columns)
-            print("Status:", result.status)
+        for device in schedule_data.needed_socket_list:
             print(
-                f"objective {PHASE_NUMBER_TO_DESCRIPTION_MAP[phase_number]}:",
-                result.objective_value,
+                f"{device.device_name} has missing energy: {result.missing_energy[device.device_name]:.3f}"
             )
-            print(df.to_string(index=False, float_format="%.3f"))
-
-            for device in schedule_data.needed_socket_list:
-                print(
-                    f"{device.device_name} has missing energy: {result.missing_energy[device.device_name]:.3f}"
-                )
 
 
 class GreedySchedulingHeuristic(Heur):
@@ -449,7 +458,7 @@ class GreedySchedulingHeuristic(Heur):
 
     def heurexec(self, heurtiming, nodeinfeasible):
         if self.called:
-            return {"result": self.SCIP_DIDNOTRUN}
+            return {"result": SCIP_RESULT.DIDNOTRUN}
         self.called = True
 
         model = self.model
@@ -459,40 +468,137 @@ class GreedySchedulingHeuristic(Heur):
         # To get a value: model.getVal(var) or model.getSolVal(sol, var)
         # To set a value: model.setSolVal(sol, var, value)
 
-        grid_draw_np = np.array(
-            [
-                model.getSolVal(sol, self.variables.grid_draw[t])
-                for t in range(self.data.number_timesteps)
-            ]
-        )
-        grid_feed_np = np.array(
-            [
-                model.getSolVal(sol, self.variables.grid_draw[t])
-                for t in range(self.data.number_timesteps)
-            ]
-        )
+        values = ScheduleResultSCIP.from_vars(self.variables, model, sol)
+        print_schedule_results(self.data, [values])
+        # Get the needed sockets that are not yet full and sort them from largest power usage to smallest
+        sockets: list[SocketDevice] = self.data.needed_socket_list.copy()
 
-        # Greedy heuristic example: set all socket schedules to 1 if not full
-        for device in self.data.socket_and_battery_list:
+        # Get needed devices last, then get the devices with largest power usage last, then get highest priority (smallest value) devices last
+        sockets.sort(key=lambda d: (not d.daily_need, d.max_power_usage, -d.priority))
+        total_energy_stored = {device.device_name: 0.0 for device in sockets}
+        # heapq orders by smallest value, so to get the largest value we use the negative
+        initial_grid_feed = [
+            (-self.data.P_p[t], t) for t in range(self.data.number_timesteps)
+        ]
+        heapq.heapify(initial_grid_feed)
+        grid_draw = [0.0] * self.data.number_timesteps
+        grid_mode = [0] * self.data.number_timesteps
+        grid_feed = self.data.P_p
+        while initial_grid_feed:
+            (available_power, index) = heapq.heappop(initial_grid_feed)
+
+            socket, socket_i = get_schedulable_socket(sockets, values.schedule, index)
+            if socket is None or socket_i is None:
+                # If all devices are already scheduled --> do not add this grid_feed back to the heapq.
+                continue
+
+            remaining_power = -available_power - socket.max_power_usage
+            if remaining_power <= 0:
+                # If the energy feed to the grid becomes negative, save power to energy drawn from the grid
+                grid_draw[index] = -remaining_power
+                grid_feed[index] = 0.0
+                grid_mode[index] = 1
+            else:
+                grid_draw[index] = 0.0
+                grid_feed[index] = remaining_power
+                grid_mode[index] = 0
+                heapq.heappush(initial_grid_feed, (-remaining_power, index))
+            # Schedule the device at the index
+            schedule_var = model.getTransformedVar(
+                self.variables.schedule[socket.device_name, index]
+            )
+            model.setSolVal(sol, schedule_var, 1)
+            values.schedule[socket.device_name, index] = 1
+            # Update total energy
+            total_energy_stored[socket.device_name] += (
+                socket.max_power_usage * self.data.delta_t
+            )
+            values.energy_stored[socket.device_name, index] = (
+                socket.max_power_usage * self.data.delta_t
+            )
+            if (
+                total_energy_stored[socket.device_name]
+                >= socket.policy.energy_considered_full
+            ):
+                sockets.pop(socket_i)
+            # If all devices are now full --> break
+            if not sockets:
+                break
+
+        print(values.energy_stored)
+        # TODO: Update all other variables such that the rest of the constraints are met:
+        # Set values for grid feed and grid draw:
+        for t in range(self.data.number_timesteps):
+            if grid_feed[t] > 0 and grid_draw[t] > 0:
+                print(f"grid_feed: {grid_feed[t]}, grid_draw: {grid_draw[t]}")
+            grid_feed_var = model.getTransformedVar(self.variables.grid_feed[t])
+            grid_draw_var = model.getTransformedVar(self.variables.grid_draw[t])
+            grid_mode_var = model.getTransformedVar(self.variables.grid_mode[t])
+            model.setSolVal(sol, grid_feed_var, grid_feed[t])
+            model.setSolVal(sol, grid_draw_var, grid_draw[t])
+            if grid_mode_var.getLbLocal() != grid_mode_var.getUbLocal():
+                model.setSolVal(sol, grid_mode_var, grid_mode[t])
+
+        for device in self.data.needed_socket_list:
+            cumulative = 0.0
             for t in range(self.data.number_timesteps):
-                var = self.variables.schedule[device.device_name, t]
-                if isinstance(device, SocketDevice):
-                    # Check if device is not full
-                    energy_var = self.variables.E_s[device.device_name, t]
-                    energy_val = model.getSolVal(sol, energy_var)
-                    if energy_val < device.policy.energy_considered_full:
-                        model.setSolVal(sol, var, 1.0)
-                    else:
-                        model.setSolVal(sol, var, 0.0)
-                else:
-                    # For batteries, set to max charge/discharge if possible
-                    model.setSolVal(sol, var, model.getUbGlobal(var))
+                print("Hello")
+                print(values.energy_stored[device.device_name, t])
+                if t != 0:
+                    cumulative += values.energy_stored[device.device_name, t]
+                energy_stored_var = model.getTransformedVar(
+                    self.variables.E_s[device.device_name, t]
+                )
+                if model.isVarAggregated(energy_stored_var):
+                    print(model.getAggrVar(energy_stored_var))
+                model.setSolVal(
+                    sol,
+                    energy_stored_var,
+                    cumulative,
+                )
+            if (
+                device.policy.energy_considered_full
+                > values.energy_stored[
+                    device.device_name, self.data.number_timesteps - 1
+                ]
+            ):
+                model.setSolVal(
+                    sol,
+                    self.variables.missing_energy[device.device_name],
+                    device.policy.energy_considered_full
+                    - values.energy_stored[
+                        device.device_name, self.data.number_timesteps - 1
+                    ],
+                )
+        # z_value = max(sum(grid_feed) / self.data.number_timesteps, max(grid_draw))
+        print_schedule_results(
+            self.data,
+            [ScheduleResultSCIP.from_vars(self.variables, model, sol)],
+        )
+        # model.setSolVal(sol, self.variables.z, z_value)
 
-        # You can similarly set other variables as needed
+        # For secondary objective
+        # for device in self.data.socket_list:
+        #     for t in range(self.data.number_timesteps - 1):
+        #         self.variables.diff[device.device_name, t]
+        #         self.variables.switches[device.device_name, t]
 
         # Check and add solution
-        if model.checkSol(sol):
-            model.addSol(sol)
-            return {"result": self.SCIP_FOUNDSOL}
+        stored = model.trySol(sol)
+        if stored:
+            print("Heuristic found a solution.")
+            return {"result": SCIP_RESULT.FOUNDSOL}
         else:
-            return {"result": self.SCIP_DIDNOTFIND}
+            print("Heuristic did not find a solution.")
+            return {"result": SCIP_RESULT.DIDNOTFIND}
+
+
+def get_schedulable_socket(
+    socket_list: list[SocketDevice], schedule: dict[tuple[str, int], float], index: int
+):
+    for i in reversed(range(len(socket_list))):
+        device = socket_list[i]
+        if schedule[device.device_name, index] <= 1:
+            # Get the device that is not yet scheduled at this max.
+            return device, i
+    return None, None

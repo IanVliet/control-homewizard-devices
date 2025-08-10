@@ -8,6 +8,7 @@ import time
 # )
 from control_homewizard_devices.schedule_devices_scip import (
     DeviceSchedulingOptimizationSCIP,
+    print_schedule_results,
 )
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from pathlib import Path
@@ -20,6 +21,14 @@ parser.add_argument(
     "--debug-scheduler",
     action="store_true",
     help="Enable debug output for the scheduler related tests",
+)
+parser.add_argument(
+    "--single-schedule",
+    nargs="?",
+    const=10,
+    type=int,
+    default=None,
+    help="Only obtain a single schedule with the indicated size. Uses the value provided or a default value of 10 if no value is provided.",
 )
 args = parser.parse_args()
 
@@ -65,6 +74,8 @@ def run_benchmark():
     Run the scheduling benchmark for HomeWizard devices.
     """
     size = 4
+    if args.single_schedule is not None:
+        size = args.single_schedule
     data_multiplier = 2
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -112,7 +123,12 @@ def run_benchmark():
         if scheduling_time > 10:
             print(f"Scheduling took too long, max data size {size}.")
             if args.debug_scheduler:
-                optimization.print_results(data, results)
+                print_schedule_results(data, results)
+            break
+        if args.single_schedule is not None:
+            print(
+                f"single-schedule flag used, stopping benchmark with data size {args.single_schedule}"
+            )
             break
         size *= data_multiplier
         if size > 200:
