@@ -8,8 +8,12 @@ from control_homewizard_devices.device_classes import (
 # from control_homewizard_devices.schedule_devices_pulp import (
 #     DeviceSchedulingOptimizationPULP as DeviceSchedulingOptimization,
 # )
-from control_homewizard_devices.schedule_devices_scip import (
-    DeviceSchedulingOptimizationSCIP as DeviceSchedulingOptimization,
+# from control_homewizard_devices.schedule_devices_scip import (
+#     DeviceSchedulingOptimizationSCIP as DeviceSchedulingOptimization,
+#     print_schedule_results,
+# )
+from control_homewizard_devices.schedule_devices import (
+    DeviceSchedulingOptimization,
     print_schedule_results,
 )
 
@@ -74,7 +78,7 @@ def test_single_device_only_on_needed(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
 
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -97,7 +101,7 @@ def test_single_socket_only_on_optional(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
 
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -128,7 +132,7 @@ def test_single_battery_only_on(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
 
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -152,7 +156,7 @@ def test_single_device_on_and_off(power_1kw, request):
 
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -182,7 +186,7 @@ def test_charge_battery_until_full(power_1kw, request):
 
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -226,7 +230,7 @@ def test_schedule_second_device_only(power_0_5kw_and_1kw, request):
     )
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         0,
         0,
@@ -277,7 +281,7 @@ def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
     )
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -328,7 +332,7 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
     )
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -372,7 +376,7 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
     data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     # expects switching between states to occur as little as possible (so 0, 0, 1, 1 instead of 0, 1, 0, 1 for the socket)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         0,
@@ -410,7 +414,7 @@ def test_insufficient_power_for_activation_two_needed_devices(
     )
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -447,7 +451,7 @@ def test_maximum_capacity_of_battery(power_1kw, request):
     data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[
         f"schedule {devices_list[0].device_name}"
     ].to_list() == pytest.approx(
@@ -482,7 +486,7 @@ def test_maximum_storage_of_sockets(power_1kw, request):
     data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -506,7 +510,7 @@ def test_not_perfectly_matching_power(power_1kw, request):
     data, results = optimization.solve_schedule_devices(power_1kw, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -530,7 +534,7 @@ def test_optional_device_not_fully_charged(power_descending, request):
     data, results = optimization.solve_schedule_devices(power_descending, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -557,7 +561,7 @@ def test_devices_out_of_order_due_to_power(power_descending, request):
     data, results = optimization.solve_schedule_devices(power_descending, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -587,7 +591,7 @@ def test_needed_device_not_fully_charged(power_ascending, request):
     data, results = optimization.solve_schedule_devices(power_ascending, devices_list)
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
         1,
@@ -613,7 +617,7 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
     )
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
-    df_schedules = data.df_power_interpolated
+    df_schedules = results[-1].df_variables
     # print(power_1kw_2_delta_t)
     # print(df_schedules)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
