@@ -231,27 +231,43 @@ class DeviceSchedulingOptimization:
     ) -> bool:
         df_variables = self.variables.df_variables
         # Starting from timestep t=0 for each t:
-        temp_df_variables = df_variables.copy()
+        df_variables_battery_charged = df_variables.copy()
         max_charging_timesteps = 0.0
         min_diff = float("inf")
         best_temp_df_variables = df_variables.copy()
         for t_s in range(self.data.number_timesteps):
-            # Charge the batteries at timestep t_s (previous iterations ensure that the batteries are charged at t_s)
-            self.charge_batteries_at_timestep(t_s, temp_df_variables)
+            # Charge the batteries at timestep t_s (previous iterations ensure that the batteries are charged up to t_s)
+            self.charge_batteries_at_timestep(t_s, df_variables_battery_charged)
+            temp_df_variables = df_variables_battery_charged.copy()
             # Create a numpy array of available power for the scenario where the batteries only charge until t_s; stopping afterwards.
             available_power = temp_df_variables[ColNames.AVAILABLE_POWER].to_numpy(
                 copy=True
             )
             # available_power[:t_s] = available_power_battery_consumption[:t_s]
-            for t_e in range(t_s, self.data.number_timesteps):
+            for t_e in range(t_s + 1, self.data.number_timesteps):
+                print(f"({t_s}, {t_e})")
+                print(
+                    "1:",
+                    temp_df_variables.to_string(index=False, float_format="%.3f"),
+                )
                 needed_power = device.max_power_usage - available_power[t_e]
                 energy_stored = temp_df_variables.iat[
-                    t_e,
+                    t_e - 1,
                     temp_df_variables.columns.get_loc(
                         ColNames.energy_stored(self.data.aggregate_battery)
                     ),
                 ]
-
+                print("needed_energy:", needed_power * self.delta_t)
+                print("energy_stored:", energy_stored)
+                print("needed_power:", needed_power)
+                print("max_power_usage:", self.data.aggregate_battery.max_power_usage)
+                print(
+                    "state:",
+                    temp_df_variables.iat[
+                        t_e,
+                        temp_df_variables.columns.get_loc(ColNames.state(device)),
+                    ],
+                )
                 # If batteries cannot provide enough power or the device is already scheduled --> Charge the batteries during this step
                 if (
                     needed_power * self.delta_t > energy_stored
@@ -266,8 +282,15 @@ class DeviceSchedulingOptimization:
                     continue
 
                 # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
+
                 self.discharge_batteries(needed_power, t_e, temp_df_variables)
+                print(
+                    "2: ", temp_df_variables.to_string(index=False, float_format="%.3f")
+                )
                 self.schedule_device(t_e, device, temp_df_variables)
+                print(
+                    "3: ", temp_df_variables.to_string(index=False, float_format="%.3f")
+                )
             # If enough timesteps are available --> continue to the next device.
             charging_timesteps = temp_df_variables[ColNames.state(device)].sum()
             bool_schedule = temp_df_variables[ColNames.state(device)] > 0
@@ -286,9 +309,9 @@ class DeviceSchedulingOptimization:
                 max_charging_timesteps = charging_timesteps
                 min_diff = diff
                 best_temp_df_variables = temp_df_variables.copy()
-            if max_charging_timesteps >= charge_duration:
-                # Best scenario already found --> break
-                break
+            # if max_charging_timesteps >= charge_duration:
+            #     # Best scenario already found --> break
+            #     break
 
         # Update the schedule with the best scenario found.
         df_variables.update(best_temp_df_variables)
@@ -308,6 +331,7 @@ class DeviceSchedulingOptimization:
                     ColNames.energy_stored(self.data.aggregate_battery)
                 ),
             ]
+            print("start_energy:", start_energy)
         else:
             start_energy = self.data.aggregate_battery.energy_stored
         max_power = (
@@ -326,13 +350,14 @@ class DeviceSchedulingOptimization:
             start_energy + added_power * self.delta_t,
             available_power - added_power,
         ]
+        print("new_values:", new_values)
         df_schedule.loc[df_schedule.index[timestep], columns] = new_values
 
     def discharge_batteries(
         self, needed_power: float, timestep: int, df_schedule: pd.DataFrame
     ):
         energy_stored = df_schedule.at[
-            df_schedule.index[timestep],
+            df_schedule.index[timestep - 1],
             ColNames.energy_stored(self.data.aggregate_battery),
         ]
         available_power = df_schedule.at[
@@ -362,15 +387,15 @@ class DeviceSchedulingOptimization:
         self, timestep: int, device: SocketDevice, df_schedule: pd.DataFrame
     ):
         energy_stored = df_schedule.at[
-            df_schedule.index[timestep],
+            df_schedule.index[timestep - 1],
             ColNames.energy_stored(device),
         ]
         available_power = df_schedule.at[
             df_schedule.index[timestep], ColNames.AVAILABLE_POWER
         ]
         columns = [
-            ColNames.state(self.data.aggregate_battery),
-            ColNames.energy_stored(self.data.aggregate_battery),
+            ColNames.state(device),
+            ColNames.energy_stored(device),
             ColNames.AVAILABLE_POWER,
         ]
         new_values = [
