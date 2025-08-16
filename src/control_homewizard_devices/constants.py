@@ -13,6 +13,8 @@ SCIP_BINARY = "B"
 SCIP_INTEGER = "I"
 SCIP_CONTINUOUS = "C"
 
+AGGREGATE_BATTERY = "aggregate_battery"
+
 
 class VariableCategory(Enum):
     """

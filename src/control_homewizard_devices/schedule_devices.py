@@ -7,13 +7,7 @@ from control_homewizard_devices.device_classes import (
     Battery,
     CompleteDevice,
 )
-from control_homewizard_devices.constants import (
-    MAX_GRID_DRAW,
-    ENERGY_STORED_PENALTY,
-    EPSILON,
-    SCIP_BINARY,
-    SCIP_CONTINUOUS,
-)
+from control_homewizard_devices.constants import AGGREGATE_BATTERY
 from typing import Any
 import numpy as np
 import heapq
@@ -26,7 +20,7 @@ class AggregateBattery:
     """
 
     def __init__(self, battery_list: list[Battery]) -> None:
-        self.device_name = "aggregate_battery"
+        self.device_name = AGGREGATE_BATTERY
         self.battery_list = battery_list
         self.max_power_usage = sum(battery.max_power_usage for battery in battery_list)
         self.energy_stored = sum(battery.energy_stored for battery in battery_list)
@@ -76,6 +70,11 @@ class ScheduleData:
         self.needed_socket_list = [
             device for device in self.socket_list if device.daily_need
         ]
+        self.needed_socket_list.sort(key=lambda d: d.priority)
+        self.optional_socket_list = [
+            device for device in self.socket_list if not device.daily_need
+        ]
+        self.optional_socket_list.sort(key=lambda d: d.priority)
         self.MAX_PRIORITY = (
             max(device.priority for device in socket_and_battery_list) + 1
         )
@@ -113,31 +112,13 @@ class Variables:
         """
         self.df_variables = pd.DataFrame(index=data.df_power_interpolated.index)
         for device in data.devices_list:
+            # in schedule: a device with -1 provides power (e.g. a battery discharging), 0 a device does nothing, 1 a device consumes power
             self.df_variables[ColNames.state(device)] = 0
             self.df_variables[ColNames.energy_stored(device)] = device.energy_stored
 
         self.df_variables[ColNames.AVAILABLE_POWER] = data.df_power_interpolated[
             ColNames.POWER_W
         ].copy()
-
-        # my_variables
-        # in schedule: a device with -1 provides power (e.g. a battery discharging), 0 a device does nothing, 1 a device consumes power
-        # The batteries can charge and discharge up to their max power, but can also do in between, therefore we should turn LpInteger into LpContinuous.
-        self.schedule = {
-            (device.device_name, t): 0
-            for device in data.socket_and_battery_list
-            for t in range(data.number_timesteps)
-        }
-        # Energy stored
-        # The devices connected through the sockets often stop using power when they are full,
-        # so we allow them to overcharge for up to 0.9 of the extra power consumed during a time step.
-        # If we did not use the 0.9 and 0.1, the devices would be overcharged an for an entire extra step if the capacity and storage matched perfectly.
-        self.E_s = {
-            (device.device_name, t): device.energy_stored
-            for device in data.socket_and_battery_list
-            for t in range(data.number_timesteps)
-        }
-        self.available_power = {t: data.P_p[t] for t in range(data.number_timesteps)}
 
 
 class DeviceSchedulingOptimization:
@@ -151,7 +132,170 @@ class DeviceSchedulingOptimization:
     ):
         self.delta_t = delta_t
 
-    def charge_batteries(self, timestep: int, df_schedule: pd.DataFrame):
+    def solve_schedule_devices(
+        self,
+        df_power: pd.DataFrame,
+        socket_and_battery_list: list[SocketDevice | Battery],
+        time_limit: int = 60,
+    ) -> tuple[ScheduleData, list[Variables]]:
+        """
+        Solve the scheduling problem for devices that need to be charged.
+        """
+        # create the problem to be optimized
+        results: list[Variables] = []
+        self.data = ScheduleData(df_power, self.delta_t, socket_and_battery_list)
+        self.variables = Variables(self.data)
+        df_variables = self.variables.df_variables
+
+        # Predicted power --> Available power taking into account already scheduled devices.
+
+        # Potential options for scheduling
+        # 1. Schedule if enough available power.
+        # 2. Enough available when batteries are added.
+        # 3. Taking power from the grid.
+
+        # Needed devices can use 1, 2 and 3.
+        # Optional devices can only use 1
+
+        for device in self.data.needed_socket_list:
+            # Determine minimum number of timesteps needed to charge the device.
+            charge_duration = self.get_charge_duration(device)
+
+            # 1. Schedule if there is enough available power
+            # Determine the timesteps where the device can be charged
+            device_full = self.schedule_device_available_power(device, charge_duration)
+            # If there are a sufficient number of timesteps --> go to the next device
+            if device_full:
+                continue
+            # Otherwise try option 2.
+            # 2. Schedule if the batteries can be used to schedule the devices without using power from the grid.
+            # --- Find the timesteps where the battery can be used to provide enough power for the device ---
+            if len(self.data.battery_list) > 0:
+                device_full = self.schedule_device_with_battery(device, charge_duration)
+                if device_full:
+                    continue
+            # Continue to option 3 if the device is not yet charged completely.
+            # 3. Schedule device at maximum available power.
+            self.schedule_max_power(device, charge_duration)
+            results.append(self.variables)
+
+        for device in self.data.optional_socket_list:
+            # Determine minimum number of timesteps needed to charge the device.
+            charge_duration = self.get_charge_duration(device)
+            # Schedule if there is enough available power
+            device_full = self.schedule_device_available_power(device, charge_duration)
+
+        # Charge the aggregate battery at the end of the schedule.
+        if len(self.data.battery_list) > 0:
+            self.charge_batteries_remaining()
+
+        results.append(self.variables)
+        return self.data, results
+
+    def get_charge_duration(self, device: SocketDevice) -> int:
+        """
+        Calculate the number of timesteps needed to charge the device to its full capacity.
+        """
+        return int(
+            ceil(
+                (device.policy.energy_considered_full - device.energy_stored)
+                / (device.max_power_usage * self.delta_t)
+            )
+        )
+
+    def schedule_device_available_power(
+        self, device: SocketDevice, charge_duration: int
+    ) -> bool:
+        df_variables = self.variables.df_variables
+        chargeable_mask = (
+            df_variables[ColNames.AVAILABLE_POWER] >= device.max_power_usage
+        )
+        device_full = chargeable_mask.sum() >= charge_duration
+        if device_full:
+            # Schedule the device starting with the first available timesteps.
+            indices = df_variables.index[chargeable_mask][:charge_duration]
+        else:
+            indices = df_variables.index[chargeable_mask]
+
+        df_variables.loc[indices, ColNames.state(device)] = 1
+        # Update available power.
+        df_variables.loc[indices, ColNames.AVAILABLE_POWER] -= device.max_power_usage
+        increased_energy = pd.Series(0.0, index=df_variables.index)
+        increased_energy.loc[indices] = device.max_power_usage * self.delta_t
+        cumsum_energy = increased_energy.cumsum()
+        df_variables[ColNames.energy_stored(device)] += cumsum_energy
+        return device_full
+
+    def schedule_device_with_battery(
+        self, device: SocketDevice, charge_duration: int
+    ) -> bool:
+        df_variables = self.variables.df_variables
+        # Starting from timestep t=0 for each t:
+        temp_df_variables = df_variables.copy()
+        max_charging_timesteps = 0.0
+        min_diff = float("inf")
+        best_temp_df_variables = df_variables.copy()
+        for t_s in range(self.data.number_timesteps):
+            # Charge the batteries at timestep t_s (previous iterations ensure that the batteries are charged at t_s)
+            self.charge_batteries_at_timestep(t_s, temp_df_variables)
+            # Create a numpy array of available power for the scenario where the batteries only charge until t_s; stopping afterwards.
+            available_power = temp_df_variables[ColNames.AVAILABLE_POWER].to_numpy(
+                copy=True
+            )
+            # available_power[:t_s] = available_power_battery_consumption[:t_s]
+            for t_e in range(t_s, self.data.number_timesteps):
+                needed_power = device.max_power_usage - available_power[t_e]
+                energy_stored = temp_df_variables.iat[
+                    t_e,
+                    temp_df_variables.columns.get_loc(
+                        ColNames.energy_stored(self.data.aggregate_battery)
+                    ),
+                ]
+
+                # If batteries cannot provide enough power or the device is already scheduled --> Charge the batteries during this step
+                if (
+                    needed_power * self.delta_t > energy_stored
+                    or needed_power > self.data.aggregate_battery.max_power_usage
+                    or temp_df_variables.iat[
+                        t_e,
+                        temp_df_variables.columns.get_loc(ColNames.state(device)),
+                    ]
+                    > 0
+                ):
+                    self.charge_batteries_at_timestep(t_e, temp_df_variables)
+                    continue
+
+                # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
+                self.discharge_batteries(needed_power, t_e, temp_df_variables)
+                self.schedule_device(t_e, device, temp_df_variables)
+            # If enough timesteps are available --> continue to the next device.
+            charging_timesteps = temp_df_variables[ColNames.state(device)].sum()
+            bool_schedule = temp_df_variables[ColNames.state(device)] > 0
+            if bool_schedule.any():
+                first_pos = bool_schedule.to_numpy().argmax()
+                last_pos = (
+                    len(bool_schedule) - 1 - bool_schedule.to_numpy()[::-1].argmax()
+                )
+                diff = last_pos - first_pos
+            else:
+                diff = float("inf")
+            # Save the scenario with maximum timesteps available.
+            if charging_timesteps > max_charging_timesteps or (
+                charging_timesteps == max_charging_timesteps and diff < min_diff
+            ):
+                max_charging_timesteps = charging_timesteps
+                min_diff = diff
+                best_temp_df_variables = temp_df_variables.copy()
+            if max_charging_timesteps >= charge_duration:
+                # Best scenario already found --> break
+                break
+
+        # Update the schedule with the best scenario found.
+        df_variables.update(best_temp_df_variables)
+        # If the device could be scheduled completely --> go to next device.
+        return max_charging_timesteps >= charge_duration
+
+    def charge_batteries_at_timestep(self, timestep: int, df_schedule: pd.DataFrame):
         available_power = df_schedule.iat[
             timestep, df_schedule.columns.get_loc(ColNames.AVAILABLE_POWER)
         ]
@@ -236,175 +380,75 @@ class DeviceSchedulingOptimization:
         ]
         df_schedule.loc[df_schedule.index[timestep], columns] = new_values
 
-    def solve_schedule_devices(
-        self,
-        df_power: pd.DataFrame,
-        socket_and_battery_list: list[SocketDevice | Battery],
-        time_limit: int = 60,
-    ) -> tuple[ScheduleData, list[Variables]]:
-        """
-        Solve the scheduling problem for devices that need to be charged.
-        """
-        # create the problem to be optimized
-        results: list[Variables] = []
-        self.data = ScheduleData(df_power, self.delta_t, socket_and_battery_list)
-        self.variables = Variables(self.data)
+    def schedule_max_power(self, device: SocketDevice, charge_duration: int):
         df_variables = self.variables.df_variables
+        already_charged = df_variables[ColNames.state(device)].sum()
+        remaining_charge_duration = charge_duration - already_charged
+        if remaining_charge_duration <= 0:
+            return
 
-        # Predicted power --> Available power taking into account already scheduled devices.
+        top_indices = (
+            df_variables[ColNames.AVAILABLE_POWER]
+            .nlargest(remaining_charge_duration)
+            .index
+        )
+        df_variables.loc[top_indices, ColNames.state(device)] = 1
+        # Update available power.
+        df_variables.loc[top_indices, ColNames.AVAILABLE_POWER] -= (
+            device.max_power_usage
+        )
+        increased_energy = pd.Series(0.0, index=df_variables.index)
+        increased_energy.loc[top_indices] = device.max_power_usage * self.delta_t
+        cumsum_energy = increased_energy.cumsum()
+        df_variables[ColNames.energy_stored(device)] += cumsum_energy
 
-        # Potential options for scheduling
-        # 1. Schedule if enough available power.
-        # 2. Enough available when batteries are added.
-        # 3. Taking power from the grid.
-
-        # Needed devices can use 1, 2 and 3.
-        # Optional devices can only use 1
-
-        for device in self.data.needed_socket_list:
-            # Determine minimum number of timesteps needed to charge the device.
-            charge_duration = int(
-                ceil(device.policy.energy_considered_full - device.energy_stored)
-                / (device.max_power_usage * self.delta_t)
+    def charge_batteries_remaining(self):
+        """
+        Charge the batteries with the remaining available power.
+        This is called after all devices have been scheduled.
+        """
+        df_variables = self.variables.df_variables
+        mask = (
+            (df_variables[ColNames.state(self.data.aggregate_battery)] == 0)
+            & (df_variables[ColNames.AVAILABLE_POWER] > 0)
+            & (
+                df_variables[ColNames.energy_stored(self.data.aggregate_battery)]
+                < self.data.aggregate_battery.max_energy_stored
             )
+        )
+        # Power consumed (capped at max_power_usage)
+        possible_power_consumed = df_variables.loc[mask, ColNames.AVAILABLE_POWER].clip(
+            upper=self.data.aggregate_battery.max_power_usage
+        )
 
-            # 1. Schedule if there is enough available power
-            # Determine the timesteps where the device can be charged
-            chargeable_mask = (
-                df_variables[ColNames.AVAILABLE_POWER] > device.max_power_usage
+        # Update energy stored (capped at max_energy_stored)
+        increased_energy = pd.Series(0.0, index=df_variables.index)
+        increased_energy.loc[mask] = possible_power_consumed * self.delta_t
+        cumsum_energy = increased_energy.cumsum()
+        new_energy_stored_unlimited = (
+            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            + cumsum_energy
+        )
+        df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)] = (
+            new_energy_stored_unlimited.clip(
+                upper=self.data.aggregate_battery.max_energy_stored
             )
-            device_full = chargeable_mask.sum() > charge_duration
-            if device_full:
-                # Schedule the device starting with the first available timesteps.
-                indices = df_variables.index[chargeable_mask][:charge_duration]
-            else:
-                indices = df_variables.index[chargeable_mask]
-            df_variables.loc[indices, ColNames.state(device)] = 1
-            # Update available power.
-            df_variables.loc[indices, ColNames.AVAILABLE_POWER] -= (
-                device.max_power_usage
-            )
-            increased_energy = pd.Series(0.0, index=df_variables.index)
-            increased_energy.loc[indices] = device.max_power_usage * self.delta_t
-            cumsum_energy = increased_energy.cumsum()
-            df_variables.loc[indices, ColNames.energy_stored(device)] += cumsum_energy
+        )
+        # Device full mask
+        device_full_mask = (
+            new_energy_stored_unlimited > self.data.aggregate_battery.max_energy_stored
+        )
 
-            # If there are a sufficient number of timesteps --> go to the next device
-            if device_full:
-                continue
-            # Otherwise try option 2.
-            # 2. Schedule if the batteries can be used to schedule the devices without using power from the grid.
-            # --- Find the timesteps where the battery can be used to provide enough power for the device ---
-            if len(self.data.battery_list) > 0:
-                # Starting from timestep t=0 for each t:
-                temp_df_variables = df_variables.copy()
-                max_charging_timesteps = 0.0
-                min_diff = float("inf")
-                best_temp_df_variables = df_variables.copy()
-                for t_s in range(self.data.number_timesteps):
-                    # Charge the batteries at timestep t_s (previous iterations ensure that the batteries are charged at t_s)
-                    self.charge_batteries(t_s, temp_df_variables)
-                    # Create a numpy array of available power for the scenario where the batteries only charge until t_s; stopping afterwards.
-                    available_power = temp_df_variables[
-                        ColNames.AVAILABLE_POWER
-                    ].to_numpy(copy=True)
-                    # available_power[:t_s] = available_power_battery_consumption[:t_s]
-                    for t_e in range(t_s, self.data.number_timesteps):
-                        needed_power = device.max_power_usage - available_power[t_e]
-                        energy_stored = temp_df_variables.iat[
-                            t_e,
-                            temp_df_variables.columns.get_loc(
-                                ColNames.energy_stored(self.data.aggregate_battery)
-                            ),
-                        ]
+        # Update available power
+        power_consumed = possible_power_consumed.copy()
+        power_consumed[device_full_mask] = 0
+        df_variables.loc[mask, ColNames.AVAILABLE_POWER] -= power_consumed
 
-                        # If batteries cannot provide enough power or the device is already scheduled --> Charge the batteries during this step
-                        if (
-                            needed_power * self.delta_t > energy_stored
-                            or needed_power
-                            > self.data.aggregate_battery.max_power_usage
-                            or temp_df_variables.iat[
-                                t_e,
-                                temp_df_variables.columns.get_loc(
-                                    ColNames.state(device)
-                                ),
-                            ]
-                            > 0
-                        ):
-                            self.charge_batteries(t_e, temp_df_variables)
-                            continue
-
-                        # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
-                        self.discharge_batteries(needed_power, t_e, temp_df_variables)
-                        self.schedule_device(t_e, device, temp_df_variables)
-                    # If enough timesteps are available --> continue to the next device.
-                    charging_timesteps = temp_df_variables[ColNames.state(device)].sum()
-                    bool_schedule = temp_df_variables[ColNames.state(device)] > 0
-                    if bool_schedule.any():
-                        first_pos = bool_schedule.to_numpy().argmax()
-                        last_pos = (
-                            len(bool_schedule)
-                            - 1
-                            - bool_schedule.to_numpy()[::-1].argmax()
-                        )
-                        diff = last_pos - first_pos
-                    else:
-                        diff = float("inf")
-                    # Save the scenario with maximum timesteps available.
-                    if charging_timesteps > max_charging_timesteps or (
-                        charging_timesteps == max_charging_timesteps and diff < min_diff
-                    ):
-                        max_charging_timesteps = charging_timesteps
-                        min_diff = diff
-                        best_temp_df_variables = temp_df_variables.copy()
-                    if max_charging_timesteps >= charge_duration:
-                        # Best scenario found --> break
-                        break
-
-                # Update the schedule with the best scenario found.
-                df_variables.update(best_temp_df_variables)
-                if max_charging_timesteps >= charge_duration:
-                    # If the device could be scheduled completely --> go to next device.
-                    break
-            # Continue to option 3 if the device is not yet charging completely.
-            # 3. Schedule device at maximum available power.
-            self.schedule_max_power(device)
-
-        # TODO: Schedule the optional devices.
-        sockets: list[SocketDevice] = self.data.needed_socket_list.copy()
-
-        # Get needed devices last, then get the devices with largest power usage last, then get highest priority (smallest value) devices last
-        sockets.sort(key=lambda d: (not d.daily_need, d.max_power_usage, -d.priority))
-        results.append(self.variables)
-        return self.data, results
-
-    def schedule_max_power(self, device: SocketDevice):
-        total_energy_stored = device.energy_stored
-        # heapq orders by smallest value, so to get the largest value we use the negative
-        initial_grid_feed = [
-            (-self.variables.available_power[t], t)
-            for t in range(self.data.number_timesteps)
-        ]
-        heapq.heapify(initial_grid_feed)
-        while initial_grid_feed:
-            (available_power, index) = heapq.heappop(initial_grid_feed)
-
-            if self.variables.schedule[device.device_name, index] >= 0:
-                # If device are already scheduled --> do not add this grid_feed back to the heapq.
-                continue
-
-            remaining_power = -available_power - device.max_power_usage
-            heapq.heappush(initial_grid_feed, (-remaining_power, index))
-            # Schedule the device at the index
-            self.variables.schedule[device.device_name, index] = 1
-            # Update total energy
-            total_energy_stored += device.max_power_usage * self.data.delta_t
-            self.variables.E_s[device.device_name, index] = (
-                device.max_power_usage * self.data.delta_t
-            )
-            if total_energy_stored >= device.policy.energy_considered_full:
-                # If device is now full --> break
-                break
+        # Update state (capped at 1)
+        new_state = (power_consumed / self.data.aggregate_battery.max_power_usage).clip(
+            upper=1
+        )
+        df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
 
     def update_dataframe(
         self,

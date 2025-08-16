@@ -16,6 +16,7 @@ from control_homewizard_devices.schedule_devices import (
     DeviceSchedulingOptimization,
     print_schedule_results,
 )
+from control_homewizard_devices.constants import AGGREGATE_BATTERY
 
 DELTA_T_TEST = 0.25  # 15 minutes in hours
 
@@ -133,7 +134,7 @@ def test_single_battery_only_on(power_1kw, request):
         print_schedule_results(data, results)
 
     df_schedules = results[-1].df_variables
-    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == [
         1,
         1,
         1,
@@ -187,7 +188,7 @@ def test_charge_battery_until_full(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
     df_schedules = results[-1].df_variables
-    assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == [
         1,
         1,
         0,
@@ -384,7 +385,7 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
         1,
         1,
     ]
-    assert df_schedules[f"schedule {devices_list[1].device_name}"].to_list() == [
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == [
         1,
         1,
         -1,
@@ -452,9 +453,7 @@ def test_maximum_capacity_of_battery(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
     df_schedules = results[-1].df_variables
-    assert df_schedules[
-        f"schedule {devices_list[0].device_name}"
-    ].to_list() == pytest.approx(
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == pytest.approx(
         [
             1,
             1,
@@ -629,6 +628,9 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
         0,
         0,
     ]
+
+
+# TODO: Create test for negative power forecast where battery discharges.
 
 
 # TODO: Implement logic to substract a constant from the prediced power based on the difference between predicted power from solar
