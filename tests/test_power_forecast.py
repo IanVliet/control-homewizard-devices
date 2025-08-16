@@ -417,16 +417,16 @@ def test_insufficient_power_for_activation_two_needed_devices(
         print_schedule_results(data, results)
     df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
-        1,
-        1,
         0,
         0,
+        1,
+        1,
     ]
     assert df_schedules[f"schedule {devices_list[1].device_name}"].to_list() == [
-        0,
-        0,
         1,
         1,
+        0,
+        0,
     ]
 
 

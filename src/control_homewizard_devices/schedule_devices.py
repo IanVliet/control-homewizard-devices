@@ -22,8 +22,12 @@ class AggregateBattery:
     def __init__(self, battery_list: list[Battery]) -> None:
         self.device_name = AGGREGATE_BATTERY
         self.battery_list = battery_list
-        self.max_power_usage = sum(battery.max_power_usage for battery in battery_list)
-        self.energy_stored = sum(battery.energy_stored for battery in battery_list)
+        self.max_power_usage = float(
+            sum(battery.max_power_usage for battery in battery_list)
+        )
+        self.energy_stored = float(
+            sum(battery.energy_stored for battery in battery_list)
+        )
         self.max_energy_stored = sum(
             battery.policy.energy_stored_upper for battery in battery_list
         )
@@ -113,7 +117,7 @@ class Variables:
         self.df_variables = pd.DataFrame(index=data.df_power_interpolated.index)
         for device in data.devices_list:
             # in schedule: a device with -1 provides power (e.g. a battery discharging), 0 a device does nothing, 1 a device consumes power
-            self.df_variables[ColNames.state(device)] = 0
+            self.df_variables[ColNames.state(device)] = 0.0
             self.df_variables[ColNames.energy_stored(device)] = device.energy_stored
 
         self.df_variables[ColNames.AVAILABLE_POWER] = data.df_power_interpolated[
@@ -407,7 +411,8 @@ class DeviceSchedulingOptimization:
 
     def schedule_max_power(self, device: SocketDevice, charge_duration: int):
         df_variables = self.variables.df_variables
-        already_charged = df_variables[ColNames.state(device)].sum()
+        # Since socket states should always be 0 or 1, we can convert it to int.
+        already_charged = int(df_variables[ColNames.state(device)].sum())
         remaining_charge_duration = charge_duration - already_charged
         if remaining_charge_duration <= 0:
             return
@@ -459,20 +464,28 @@ class DeviceSchedulingOptimization:
                 upper=self.data.aggregate_battery.max_energy_stored
             )
         )
+        # Calculate the actual power consumed
+        actual_power_consumed = (
+            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            - df_variables.loc[
+                mask, ColNames.energy_stored(self.data.aggregate_battery)
+            ]
+            .shift(1)
+            .fillna(0)
+        ) / self.delta_t
+
         # Device full mask
         device_full_mask = (
             new_energy_stored_unlimited > self.data.aggregate_battery.max_energy_stored
         )
 
         # Update available power
-        power_consumed = possible_power_consumed.copy()
-        power_consumed[device_full_mask] = 0
-        df_variables.loc[mask, ColNames.AVAILABLE_POWER] -= power_consumed
+        df_variables.loc[mask, ColNames.AVAILABLE_POWER] = actual_power_consumed
 
         # Update state (capped at 1)
-        new_state = (power_consumed / self.data.aggregate_battery.max_power_usage).clip(
-            upper=1
-        )
+        new_state = (
+            actual_power_consumed / self.data.aggregate_battery.max_power_usage
+        ).clip(upper=1)
         df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
 
     def update_dataframe(
