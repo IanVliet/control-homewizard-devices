@@ -6,8 +6,12 @@ import time
 # from control_homewizard_devices.schedule_devices_pulp import (
 #     DeviceSchedulingOptimizationPULP,
 # )
-from control_homewizard_devices.schedule_devices_scip import (
-    DeviceSchedulingOptimizationSCIP,
+# from control_homewizard_devices.schedule_devices_scip import (
+#     DeviceSchedulingOptimizationSCIP,
+#     print_schedule_results,
+# )
+from control_homewizard_devices.schedule_devices import (
+    DeviceSchedulingOptimization,
     print_schedule_results,
 )
 from control_homewizard_devices.device_classes import SocketDevice, Battery
@@ -113,7 +117,7 @@ def run_benchmark():
         # power_df = get_power_dataframe(size)
         power_df = get_solar_prediction_dataframe(size)
         start = time.time()
-        optimization = DeviceSchedulingOptimizationSCIP(DELTA_T_BENCHMARK)
+        optimization = DeviceSchedulingOptimization(DELTA_T_BENCHMARK)
         data, results = optimization.solve_schedule_devices(
             power_df, devices_list, time_limit=10
         )

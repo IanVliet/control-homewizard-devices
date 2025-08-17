@@ -74,11 +74,11 @@ class ScheduleData:
         self.needed_socket_list = [
             device for device in self.socket_list if device.daily_need
         ]
-        self.needed_socket_list.sort(key=lambda d: d.priority)
+        self.needed_socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
         self.optional_socket_list = [
             device for device in self.socket_list if not device.daily_need
         ]
-        self.optional_socket_list.sort(key=lambda d: d.priority)
+        self.optional_socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
         self.MAX_PRIORITY = (
             max(device.priority for device in socket_and_battery_list) + 1
         )
@@ -149,8 +149,6 @@ class DeviceSchedulingOptimization:
         results: list[Variables] = []
         self.data = ScheduleData(df_power, self.delta_t, socket_and_battery_list)
         self.variables = Variables(self.data)
-        df_variables = self.variables.df_variables
-
         # Predicted power --> Available power taking into account already scheduled devices.
 
         # Potential options for scheduling
@@ -249,11 +247,6 @@ class DeviceSchedulingOptimization:
             )
             # available_power[:t_s] = available_power_battery_consumption[:t_s]
             for t_e in range(t_s + 1, self.data.number_timesteps):
-                print(f"({t_s}, {t_e})")
-                print(
-                    "1:",
-                    temp_df_variables.to_string(index=False, float_format="%.3f"),
-                )
                 needed_power = device.max_power_usage - available_power[t_e]
                 energy_stored = temp_df_variables.iat[
                     t_e - 1,
@@ -261,17 +254,6 @@ class DeviceSchedulingOptimization:
                         ColNames.energy_stored(self.data.aggregate_battery)
                     ),
                 ]
-                print("needed_energy:", needed_power * self.delta_t)
-                print("energy_stored:", energy_stored)
-                print("needed_power:", needed_power)
-                print("max_power_usage:", self.data.aggregate_battery.max_power_usage)
-                print(
-                    "state:",
-                    temp_df_variables.iat[
-                        t_e,
-                        temp_df_variables.columns.get_loc(ColNames.state(device)),
-                    ],
-                )
                 # If batteries cannot provide enough power or the device is already scheduled --> Charge the batteries during this step
                 if (
                     needed_power * self.delta_t > energy_stored
@@ -288,13 +270,7 @@ class DeviceSchedulingOptimization:
                 # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
 
                 self.discharge_batteries(needed_power, t_e, temp_df_variables)
-                print(
-                    "2: ", temp_df_variables.to_string(index=False, float_format="%.3f")
-                )
                 self.schedule_device(t_e, device, temp_df_variables)
-                print(
-                    "3: ", temp_df_variables.to_string(index=False, float_format="%.3f")
-                )
             # If enough timesteps are available --> continue to the next device.
             charging_timesteps = temp_df_variables[ColNames.state(device)].sum()
             bool_schedule = temp_df_variables[ColNames.state(device)] > 0
@@ -335,7 +311,6 @@ class DeviceSchedulingOptimization:
                     ColNames.energy_stored(self.data.aggregate_battery)
                 ),
             ]
-            print("start_energy:", start_energy)
         else:
             start_energy = self.data.aggregate_battery.energy_stored
         max_power = (
@@ -354,7 +329,6 @@ class DeviceSchedulingOptimization:
             start_energy + added_power * self.delta_t,
             available_power - added_power,
         ]
-        print("new_values:", new_values)
         df_schedule.loc[df_schedule.index[timestep], columns] = new_values
 
     def discharge_batteries(

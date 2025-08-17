@@ -542,11 +542,12 @@ def test_optional_device_not_fully_charged(power_descending, request):
     ]
 
 
-def test_devices_out_of_order_due_to_power(power_descending, request):
+def test_devices_order_despite_power(power_descending, request):
     """
-    The first socket should be scheduled to turn on for the first two steps and the second socket for the last two steps,
-    since this results in the least amount of power needing to go to the grid.
-    It should go in this order, despite the first socket having a lower priority.
+    The socket with highest priority (smallest number) should be scheduled to turn on for the first two steps
+    and the second socket for first and third step (since these have the highest available power remaining),
+    this does not result in the least amount of power going to and from the grid.
+    (The algorithm is not guaranteed to find the optimal solution, but it should be close.)
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -563,15 +564,15 @@ def test_devices_out_of_order_due_to_power(power_descending, request):
     df_schedules = results[-1].df_variables
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         1,
-        1,
         0,
+        1,
         0,
     ]
     assert df_schedules[f"schedule {devices_list[1].device_name}"].to_list() == [
-        0,
-        0,
         1,
         1,
+        0,
+        0,
     ]
 
 
