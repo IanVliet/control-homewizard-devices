@@ -1,9 +1,7 @@
 import asyncio
 from homewizard_energy import HomeWizardEnergy
-
 import os
 from control_homewizard_devices.utils import (
-    GracefulKiller,
     setup_logger,
     initialize_devices,
 )

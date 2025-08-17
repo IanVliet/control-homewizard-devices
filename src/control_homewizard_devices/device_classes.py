@@ -1,11 +1,6 @@
-import asyncio
-
-# from homewizard_energy import HomeWizardEnergyV1
 from homewizard_energy import HomeWizardEnergy
 from .hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
-from contextlib import AsyncExitStack
 import logging
-import sys
 from dataclasses import dataclass
 
 from .constants import DELTA_T, VariableCategory
