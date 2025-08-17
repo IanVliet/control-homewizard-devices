@@ -1,8 +1,7 @@
 config/
+data/
 app.log
 homewizard_venv
-data/solar_prediction.csv
-data/solar_prediction.parquet
 __pycache__/
 .cache.sqlite
 *.pyc

@@ -2,14 +2,6 @@ import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
 import time
-
-# from control_homewizard_devices.schedule_devices_pulp import (
-#     DeviceSchedulingOptimizationPULP,
-# )
-# from control_homewizard_devices.schedule_devices_scip import (
-#     DeviceSchedulingOptimizationSCIP,
-#     print_schedule_results,
-# )
 from control_homewizard_devices.schedule_devices import (
     DeviceSchedulingOptimization,
     print_schedule_results,

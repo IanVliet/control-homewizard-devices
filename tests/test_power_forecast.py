@@ -4,14 +4,6 @@ from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
 )
-
-# from control_homewizard_devices.schedule_devices_pulp import (
-#     DeviceSchedulingOptimizationPULP as DeviceSchedulingOptimization,
-# )
-# from control_homewizard_devices.schedule_devices_scip import (
-#     DeviceSchedulingOptimizationSCIP as DeviceSchedulingOptimization,
-#     print_schedule_results,
-# )
 from control_homewizard_devices.schedule_devices import (
     DeviceSchedulingOptimization,
     print_schedule_results,

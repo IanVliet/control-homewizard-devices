@@ -1,7 +1,5 @@
-from collections import deque
 from math import ceil
 import pandas as pd
-from dataclasses import dataclass
 from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
@@ -9,8 +7,6 @@ from control_homewizard_devices.device_classes import (
 )
 from control_homewizard_devices.constants import AGGREGATE_BATTERY
 from typing import Any
-import numpy as np
-import heapq
 
 
 class AggregateBattery:
@@ -289,9 +285,6 @@ class DeviceSchedulingOptimization:
                 max_charging_timesteps = charging_timesteps
                 min_diff = diff
                 best_temp_df_variables = temp_df_variables.copy()
-            # if max_charging_timesteps >= charge_duration:
-            #     # Best scenario already found --> break
-            #     break
 
         # Update the schedule with the best scenario found.
         df_variables.update(best_temp_df_variables)
@@ -447,11 +440,6 @@ class DeviceSchedulingOptimization:
             .shift(1)
             .fillna(0)
         ) / self.delta_t
-
-        # Device full mask
-        device_full_mask = (
-            new_energy_stored_unlimited > self.data.aggregate_battery.max_energy_stored
-        )
 
         # Update available power
         df_variables.loc[mask, ColNames.AVAILABLE_POWER] = actual_power_consumed

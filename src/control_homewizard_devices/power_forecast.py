@@ -5,7 +5,7 @@ import json
 from plotly import graph_objects as go
 
 if __name__ == "__main__":
-    with open("config_devices.json", "r") as config_file:
+    with open("config/config_devices.json", "r") as config_file:
         config_data = json.load(config_file)
     solar_panels_data = config_data["solar panels"]
     for solar_panel_data in solar_panels_data:
@@ -18,8 +18,8 @@ if __name__ == "__main__":
         )
 
         predictions_df = run_forecast(site=site, ts=datetime.today(), nwp_source="icon")
-        predictions_df.to_csv("../data/solar_prediction.csv")
-        predictions_df.to_parquet("../data/solar_prediction.parquet")
+        predictions_df.to_csv("data/solar_prediction_20250817.csv")
+        predictions_df.to_parquet("data/solar_prediction_20250817.parquet")
         fig = go.Figure(go.Scatter(y=predictions_df["power_kw"]))
         fig.show()
         break

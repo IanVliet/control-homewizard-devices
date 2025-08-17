@@ -55,8 +55,6 @@ async def main_loop(
 ):
     try:
         while True:
-            # TODO: Ensure that if one task fails (i.e. one device cannot do a measurement)
-            # the code continues with the other devices and sends some kind of message about the failed measurement
             async with asyncio.TaskGroup() as tg:
                 for device in all_devices:
                     tg.create_task(device.perform_measurement(logger))
@@ -73,6 +71,7 @@ async def main_loop(
             await asyncio.sleep(30)
     except asyncio.CancelledError:
         logger.info("Loop cancelled gracefully...")
+        raise
     finally:
         logger.info("Cleaning up before shutdown...")
 
@@ -84,27 +83,21 @@ async def main(all_devices: list[CompleteDevice]):
     sorted_sockets = sorted(socket_devices, key=lambda d: d.priority)
 
     logger = setup_logger(logging.INFO)
-    killer = GracefulKiller(logger)
+    # killer = GracefulKiller(logger)
     async with AsyncExitStack() as stack:
         hwe_devices = []
         for device in all_devices:
             device.hwe_device = await stack.enter_async_context(device.get_HWE_class())
             hwe_devices.append(device.hwe_device)
 
-        main_task = asyncio.create_task(main_loop(all_devices, sorted_sockets, logger))
-
-        # wait for keyboardInterrupt to cancel the main task
-        await killer.wait_for_shutdown()
-
-        main_task.cancel()
         try:
-            await main_task
+            await main_loop(all_devices, sorted_sockets, logger)
         except asyncio.CancelledError:
-            logger.warning("CancelledError propogated")
-        except KeyboardInterrupt:
-            logger.error(
-                "Unexpected KeyboardInterrupt caught during task cancellation!"
-            )
+            logger.info("Main loop cancelled, shutting down...")
+        except Exception as e:
+            logger.error(f"An error occurred in main loop: {e}")
+            # Optionally, you can re-raise the exception if you want it to propagate
+            raise
         finally:
             logger.info("Shutting down...")
 
