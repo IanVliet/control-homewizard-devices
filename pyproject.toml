@@ -26,8 +26,6 @@ awesomeversion = "^25.8.0"
 orjson = "^3.11.2"
 quartz-solar-forecast = "^1.1.18"
 plotly = "^6.3.0"
-pyarrow = "^21.0.0"
-fastparquet = "^2024.11.0"
 huggingface-hub = "0.17.3"
 
 [tool.poetry.group.dev.dependencies]

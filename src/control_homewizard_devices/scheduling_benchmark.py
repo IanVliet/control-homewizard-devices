@@ -51,8 +51,8 @@ def get_power_dataframe(size: int, power_kw=1) -> pd.DataFrame:
 
 def get_solar_prediction_dataframe(size: int) -> pd.DataFrame:
     base_dir = Path(__file__).parent.parent.parent
-    df_solar_prediction = pd.read_parquet(
-        base_dir / "data" / "solar_prediction.parquet"
+    df_solar_prediction = pd.read_csv(
+        base_dir / "data" / "solar_prediction.csv", index_col=0, parse_dates=True
     )
     df_solar_prediction.index = pd.to_datetime(df_solar_prediction.index)
     date_0800 = (
