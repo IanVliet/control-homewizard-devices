@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling >= 1.26"]
-build-backend = "hatchling.build"
+requires = ["poetry-core>=1.5.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "control-homewizard-devices"
@@ -13,6 +13,9 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 license = "MIT"
+packages = [
+  { include = "control_homewizard_devices", from = "src" },
+]
 
 [tool.poetry.dependencies]
 python = "3.11.2"
@@ -29,9 +32,6 @@ huggingface-hub = "0.17.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
-
-[tool.hatch.build]
-packages = ["src/control_homewizard_devices"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
