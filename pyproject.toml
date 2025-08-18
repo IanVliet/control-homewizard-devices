@@ -2,32 +2,45 @@
 requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
-[project]
+[tool.poetry]
 name = "control-homewizard-devices"
 version = "0.0.1"
-authors = [{ name = "Ian van Vliet", email = "ian.vvliet@gmail.com" }]
-description = "A small python package controlling and scheduling homewizard devices"
+authors = ["Ian van Vliet <ian.vvliet@gmail.com>"]
+description = "A python package controlling and scheduling homewizard devices"
 readme = "README.md"
-requires-python = ">=3.9"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
 ]
 license = "MIT"
-license-files = ["LICEN[CS]E*"]
 
-[project.urls]
-Homepage = "https://https://github.com/IanVliet/control-homewizard-devices"
-Issues = "https://https://github.com/IanVliet/control-homewizard-devices/issues"
+[tool.poetry.dependencies]
+python = "3.11.2"
+pandas = "^2.3.1"
+python-homewizard-energy = "6.3.0"
+mashumaro = "^3.16"
+awesomeversion = "^25.8.0"
+orjson = "^3.11.2"
+quartz-solar-forecast = "^1.1.18"
+plotly = "^6.3.0"
+pyarrow = "^21.0.0"
+fastparquet = "^2024.11.0"
+huggingface-hub = "0.17.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
 
 [tool.hatch.build]
 packages = ["src/control_homewizard_devices"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+  "ignore::pydantic.warnings.PydanticDeprecatedSince20:huggingface_hub.*"
+]
 
 [tool.ruff]
 target-version = "py311"
 
-[project.scripts]
+[tool.poetry.scripts]
 myservice = "control_homewizard_devices.control_energy_systems:entrypoint"
