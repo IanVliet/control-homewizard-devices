@@ -3,7 +3,7 @@ from .hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
 import logging
 from dataclasses import dataclass
 
-from .constants import DELTA_T, VariableCategory
+from .constants import DELTA_T, IS_FULL_POWER_RATIO, PERIODIC_SLEEP_DURATION
 
 
 class CompleteDevice:
@@ -45,6 +45,12 @@ class CompleteDevice:
         return HomeWizardEnergy(host=self.ip_address)
 
     async def perform_measurement(self, logger: logging.Logger):
+        """
+        Perform a measurement for the device.
+        This method should be overridden in subclasses to implement specific measurement logic.
+
+        For example, certain devices would also update the energy stored based on the instantaneous power usage or state of charge.
+        """
         if self.hwe_device is not None:
             # Get device information, like firmware version
             hwe_device_info = await self.hwe_device.device()
@@ -64,6 +70,35 @@ class CompleteDevice:
     def get_instantaneous_power(self):
         """
         For a general device, we assume that this power can not be freed,
+        therefore we should just return power
+        """
+        return self.inst_power_usage
+
+
+class P1Device(CompleteDevice):
+    """
+    Class for homewizard p1 meter
+    """
+
+    def __init__(self, ip_address, device_type, device_name, **kwargs):
+        super().__init__(ip_address, device_type, device_name, **kwargs)
+
+    async def perform_measurement(self, logger: logging.Logger):
+        if self.hwe_device is not None:
+            # Get power and current measurement
+            measurement = await self.hwe_device.data()
+            self.inst_power_usage = measurement.active_power_w
+            self.inst_current = measurement.active_current_a
+
+            # log the power and current
+            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
+            logger.info(f"{self.device_name} current: {self.inst_current}")
+        else:
+            logger.warning(f"{self.device_name}'s hwe_device is None.")
+
+    def get_instantaneous_power(self):
+        """
+        For the P1 a negative power means that is the available power,
         therefore we should just return power
         """
         return self.inst_power_usage
@@ -104,6 +139,11 @@ class SocketDevice(CompleteDevice):
         return self._max_power_usage
 
     async def perform_measurement(self, logger: logging.Logger):
+        """
+        Perform a measurement for the socket device.
+        This method gets the instantaneous power usage, current, and state of the socket.
+        It also updates the energy stored based on the instantaneous power usage.
+        """
         if self.hwe_device is not None:
             # Get power and current measurement
             measurement = await self.hwe_device.data()
@@ -118,11 +158,31 @@ class SocketDevice(CompleteDevice):
                 logger.warning(f"{self.device_name}'s device state is None")
 
             # log the power, current and state
-            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
-            logger.info(f"{self.device_name} current: {self.inst_current}")
+            logger.info(f"{self.device_name} power: {self.inst_power_usage} W")
+            logger.debug(f"{self.device_name} current: {self.inst_current}")
             logger.info(f"{self.device_name} power state: {self.inst_state}")
+            # Update the energy stored based on the instantaneous power usage
+            self.update_energy_stored(logger)
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
+
+    def update_energy_stored(self, logger: logging.Logger):
+        """
+        Update the energy stored in the socket based on the current power usage.
+        """
+        if self.inst_power_usage is not None:
+            if (
+                self.inst_state
+                and self.inst_power_usage < IS_FULL_POWER_RATIO * self.max_power_usage
+            ):
+                # If the socket is on and the power usage is below the full power ratio,
+                # we consider it fully charged
+                self.energy_stored = self.energy_capacity
+            else:
+                self.energy_stored += (
+                    self.inst_power_usage * PERIODIC_SLEEP_DURATION / 3600
+                )
+            logger.info(f"{self.device_name} energy stored: {self.energy_stored} Wh")
 
     def get_instantaneous_power(self):
         """
@@ -144,35 +204,6 @@ class SocketDevice(CompleteDevice):
             logger.info(f"{self.device_name} power state set to: {self.updated_state}")
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
-
-
-class P1Device(CompleteDevice):
-    """
-    Class for homewizard p1 meter
-    """
-
-    def __init__(self, ip_address, device_type, device_name, **kwargs):
-        super().__init__(ip_address, device_type, device_name, **kwargs)
-
-    async def perform_measurement(self, logger: logging.Logger):
-        if self.hwe_device is not None:
-            # Get power and current measurement
-            measurement = await self.hwe_device.data()
-            self.inst_power_usage = measurement.active_power_w
-            self.inst_current = measurement.active_current_a
-
-            # log the power and current
-            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
-            logger.info(f"{self.device_name} current: {self.inst_current}")
-        else:
-            logger.warning(f"{self.device_name}'s hwe_device is None.")
-
-    def get_instantaneous_power(self):
-        """
-        For the P1 a negative power means that is the available power,
-        therefore we should just return power
-        """
-        return self.inst_power_usage
 
 
 @dataclass
@@ -222,19 +253,30 @@ class Battery(CompleteDevice):
         return HomeWizardEnergyV2(host=self.ip_address, token=self._token)
 
     async def perform_measurement(self, logger: logging.Logger):
+        """
+        Perform a measurement for the battery device.
+        This method gets the instantaneous power usage and state of charge percentage.
+        It also updates the energy stored based on the state of charge.
+        """
         if self.hwe_device is not None:
             measurement = await self.hwe_device.measurement()
             self.inst_power_usage = measurement.power_w
             self.state_of_charge_pct = measurement.state_of_charge_pct
-            if self.state_of_charge_pct:
-                self.energy_stored = (
-                    self.energy_capacity * self.state_of_charge_pct / 100
-                )
             # log the power and current
-            logger.info(f"{self.device_name} power: {self.inst_power_usage}")
+            logger.info(f"{self.device_name} power: {self.inst_power_usage} W")
             logger.info(f"{self.device_name} percentage: {self.state_of_charge_pct} %")
+            # Update the energy stored based on the state of charge
+            self.update_energy_stored(logger)
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
+
+    def update_energy_stored(self, logger: logging.Logger):
+        """
+        Update the energy stored in the battery based on the current state of charge.
+        """
+        if self.state_of_charge_pct is not None:
+            self.energy_stored = self.energy_capacity * self.state_of_charge_pct / 100
+            logger.info(f"{self.device_name} energy stored: {self.energy_stored} Wh")
 
 
 class DeviceSchedulePolicy:
@@ -244,14 +286,7 @@ class DeviceSchedulePolicy:
 
     def __init__(self, device: CompleteDevice) -> None:
         self.device = device
-        self.schedule_lower: float
-        self.schedule_upper: float
-        self.schedule_variable_cat: VariableCategory
-        self.energy_stored_lower: float
         self.energy_stored_upper: float
-        self.diff_lower: float
-        self.diff_upper: float
-        self.diff_variable_cat: VariableCategory
 
 
 class BatterySchedulePolicy(DeviceSchedulePolicy):
@@ -261,14 +296,7 @@ class BatterySchedulePolicy(DeviceSchedulePolicy):
 
     def __init__(self, device: Battery) -> None:
         super().__init__(device)
-        self.schedule_lower = -1.0
-        self.schedule_upper = 1.0
-        self.schedule_variable_cat: VariableCategory = VariableCategory.CONTINUOUS
-        self.energy_stored_lower: float = 0.0
         self.energy_stored_upper: float = device.energy_capacity
-        self.diff_lower: float = -2.0
-        self.diff_upper: float = 2.0
-        self.diff_variable_cat: VariableCategory = VariableCategory.CONTINUOUS
 
 
 class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
@@ -278,10 +306,6 @@ class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
 
     def __init__(self, device: SocketDevice, delta_t: int | float) -> None:
         super().__init__(device)
-        self.schedule_lower = 0.0
-        self.schedule_upper = 1.0
-        self.schedule_variable_cat: VariableCategory = VariableCategory.BINARY
-        self.energy_stored_lower: float = 0.0
         energy_stored_buffer_upper: float = 0.9 * device.max_power_usage * delta_t
         energy_stored_buffer_lower: float = (
             device.max_power_usage * delta_t - energy_stored_buffer_upper
@@ -292,6 +316,3 @@ class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
         self.energy_considered_full: float = (
             device.energy_capacity - energy_stored_buffer_lower
         )
-        self.diff_lower: float = -1.0
-        self.diff_upper: float = 1.0
-        self.diff_variable_cat: VariableCategory = VariableCategory.INTEGER

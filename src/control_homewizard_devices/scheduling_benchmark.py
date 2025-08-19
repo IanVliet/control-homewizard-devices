@@ -2,11 +2,11 @@ import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
 import time
-from control_homewizard_devices.schedule_devices import (
+from .schedule_devices import (
     DeviceSchedulingOptimization,
     print_schedule_results,
 )
-from control_homewizard_devices.device_classes import SocketDevice, Battery
+from .device_classes import SocketDevice, Battery
 from pathlib import Path
 import argparse
 
@@ -110,9 +110,7 @@ def run_benchmark():
         power_df = get_solar_prediction_dataframe(size)
         start = time.time()
         optimization = DeviceSchedulingOptimization(DELTA_T_BENCHMARK)
-        data, results = optimization.solve_schedule_devices(
-            power_df, devices_list, time_limit=10
-        )
+        data, results = optimization.solve_schedule_devices(power_df, devices_list)
         end = time.time()
         scheduling_time = end - start
         print(f"Scheduling with size {size} took {scheduling_time:3f} seconds")

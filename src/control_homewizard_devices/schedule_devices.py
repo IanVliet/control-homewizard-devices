@@ -1,11 +1,11 @@
 from math import ceil
 import pandas as pd
-from control_homewizard_devices.device_classes import (
+from .device_classes import (
     SocketDevice,
     Battery,
     CompleteDevice,
 )
-from control_homewizard_devices.constants import AGGREGATE_BATTERY
+from .constants import AGGREGATE_BATTERY
 from typing import Any
 
 
@@ -136,7 +136,6 @@ class DeviceSchedulingOptimization:
         self,
         df_power: pd.DataFrame,
         socket_and_battery_list: list[SocketDevice | Battery],
-        time_limit: int = 60,
     ) -> tuple[ScheduleData, list[Variables]]:
         """
         Solve the scheduling problem for devices that need to be charged.
