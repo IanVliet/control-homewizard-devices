@@ -124,7 +124,7 @@ class DeviceController:
                     tg.create_task(device.perform_measurement(logger))
             logger.info("===== devices info gathered and updated =====")
             total_power = self.get_total_available_power()
-            logger.info(f"Total available power: {-total_power} kW")
+            logger.info(f"Total available power: {-total_power} W")
 
             self.primary_scheduling_with_fallback(total_power)
 
@@ -162,11 +162,14 @@ class DeviceController:
                 # Slice the solar forecast data to the next forecast time.
                 df_solar_slice = self.df_solar_forecast.loc[now:next_forecast_time]
                 logger.info(
+                    f"Predicted available solar power {df_solar_slice.iloc[0].item() * 1000} W"
+                )
+                logger.info(
                     f"Solar forecast data available for the next {len(df_solar_slice)} time steps."
                 )
                 # Available power is defined as - total power.
                 diff = df_solar_slice.iloc[0] + total_power / 1000  # Convert kW to W
-                logger.info(f"Power difference: {diff.item()} kW")
+                logger.info(f"Power difference: {diff.item() * 1000} W")
                 df_power_prediction = df_solar_slice - diff
                 logger.debug(f"Power prediction DataFrame:\n{df_power_prediction}")
 
