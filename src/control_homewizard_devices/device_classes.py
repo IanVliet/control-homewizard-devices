@@ -125,7 +125,6 @@ class SocketDevice(CompleteDevice):
         self._max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
         self.policy = SocketDeviceSchedulePolicy(self, delta_t)
-        # TODO: Reconsider whether the class needs priority or not
         self.priority = priority
         self.daily_need = daily_need
         # the (instantaneous) attributes that change due to each measurement
@@ -212,6 +211,7 @@ class UserInfo:
     token: str
 
 
+# TODO: Remove priority and daily need from Battery class, as they are not used.
 class Battery(CompleteDevice):
     """
     Homewizard Battery
@@ -224,16 +224,13 @@ class Battery(CompleteDevice):
         device_name: str,
         max_power_usage: float,
         energy_capacity: float,
-        priority: int,
         user_info: dict[str, str],
         **kwargs,
     ):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self.max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
-        self.priority = priority
         # Batteries do not have a daily need (they never draw from the grid)
-        self.daily_need = False
         self._user_info = UserInfo(**user_info)
         self._token = self._user_info.token
 

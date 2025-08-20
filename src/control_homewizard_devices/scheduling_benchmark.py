@@ -100,7 +100,6 @@ def run_benchmark():
             "test battery",
             1000,
             3000,
-            3,
             {"name": "test_user", "token": ""},
         ),
     ]

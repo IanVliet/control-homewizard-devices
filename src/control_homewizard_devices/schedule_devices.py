@@ -75,9 +75,6 @@ class ScheduleData:
             device for device in self.socket_list if not device.daily_need
         ]
         self.optional_socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
-        self.MAX_PRIORITY = (
-            max(device.priority for device in socket_and_battery_list) + 1
-        )
 
     def preprocess_power_data(self, df_power: pd.DataFrame):
         """
@@ -249,7 +246,7 @@ class DeviceSchedulingOptimization:
                         ColNames.energy_stored(self.data.aggregate_battery)
                     ),
                 ]
-                # If batteries cannot provide enough power or the device is already scheduled --> Charge the batteries during this step
+                # If batteries cannot provide enough power or the device is already scheduled --> Charge/discharge the batteries during this step
                 if (
                     needed_power * self.delta_t > energy_stored
                     or needed_power > self.data.aggregate_battery.max_power_usage
@@ -259,12 +256,21 @@ class DeviceSchedulingOptimization:
                     ]
                     > 0
                 ):
-                    self.charge_batteries_at_timestep(t_e, temp_df_variables)
+                    print(available_power[t_e])
+                    if available_power[t_e] < 0:
+                        # If available power is negative, the battery discharges.
+                        self.discharge_batteries_at_timestep(
+                            -available_power[t_e], t_e, temp_df_variables
+                        )
+                    else:
+                        self.charge_batteries_at_timestep(t_e, temp_df_variables)
                     continue
 
                 # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
 
-                self.discharge_batteries(needed_power, t_e, temp_df_variables)
+                self.discharge_batteries_at_timestep(
+                    needed_power, t_e, temp_df_variables
+                )
                 self.schedule_device(t_e, device, temp_df_variables)
             # If enough timesteps are available --> continue to the next device.
             charging_timesteps = temp_df_variables[ColNames.state(device)].sum()
@@ -294,7 +300,7 @@ class DeviceSchedulingOptimization:
         available_power = df_schedule.iat[
             timestep, df_schedule.columns.get_loc(ColNames.AVAILABLE_POWER)
         ]
-        if available_power < 0:
+        if available_power <= 0:
             return
         if timestep > 0:
             start_energy: float = df_schedule.iat[
@@ -323,7 +329,7 @@ class DeviceSchedulingOptimization:
         ]
         df_schedule.loc[df_schedule.index[timestep], columns] = new_values
 
-    def discharge_batteries(
+    def discharge_batteries_at_timestep(
         self, needed_power: float, timestep: int, df_schedule: pd.DataFrame
     ):
         energy_stored = df_schedule.at[
@@ -400,13 +406,14 @@ class DeviceSchedulingOptimization:
 
     def charge_batteries_remaining(self):
         """
-        Charge the batteries with the remaining available power.
+        Charge and uncharge the batteries with the remaining available power.
+        (Charges in case available power is positive, uncharges in case available power is negative.)
         This is called after all devices have been scheduled.
         """
         df_variables = self.variables.df_variables
         mask = (
             (df_variables[ColNames.state(self.data.aggregate_battery)] == 0)
-            & (df_variables[ColNames.AVAILABLE_POWER] > 0)
+            & (df_variables[ColNames.AVAILABLE_POWER] != 0)
             & (
                 df_variables[ColNames.energy_stored(self.data.aggregate_battery)]
                 < self.data.aggregate_battery.max_energy_stored
@@ -414,7 +421,8 @@ class DeviceSchedulingOptimization:
         )
         # Power consumed (capped at max_power_usage)
         possible_power_consumed = df_variables.loc[mask, ColNames.AVAILABLE_POWER].clip(
-            upper=self.data.aggregate_battery.max_power_usage
+            lower=-self.data.aggregate_battery.max_power_usage,
+            upper=self.data.aggregate_battery.max_power_usage,
         )
 
         # Update energy stored (capped at max_energy_stored)
@@ -427,7 +435,7 @@ class DeviceSchedulingOptimization:
         )
         df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)] = (
             new_energy_stored_unlimited.clip(
-                upper=self.data.aggregate_battery.max_energy_stored
+                lower=0, upper=self.data.aggregate_battery.max_energy_stored
             )
         )
         # Calculate the actual power consumed
@@ -446,7 +454,7 @@ class DeviceSchedulingOptimization:
         # Update state (capped at 1)
         new_state = (
             actual_power_consumed / self.data.aggregate_battery.max_power_usage
-        ).clip(upper=1)
+        ).clip(lower=-1, upper=1)
         df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
 
     def update_dataframe(

@@ -43,6 +43,16 @@ def power_descending(datetimes_delta_t):
 
 
 @pytest.fixture(scope="module")
+def power_1kw_neg_1kw(datetimes_delta_t):
+    return pd.DataFrame({"power_kw": [1, 1, -1, -1]}, index=datetimes_delta_t)
+
+
+@pytest.fixture(scope="module")
+def power_1kw_neg_1_5kw_pos_2kw(datetimes_delta_t):
+    return pd.DataFrame({"power_kw": [1, 1, -1.5, 2]}, index=datetimes_delta_t)
+
+
+@pytest.fixture(scope="module")
 def datetimes_2_delta_t():
     return pd.date_range(
         start="2025-01-01 09:00",
@@ -114,7 +124,6 @@ def test_single_battery_only_on(power_1kw, request):
             "test battery",
             1000,
             1000,
-            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -170,7 +179,6 @@ def test_charge_battery_until_full(power_1kw, request):
             "test battery",
             1000,
             500,
-            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -318,7 +326,6 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
             delta_t=DELTA_T_TEST,
         ),
     ]
-    # TODO: Optionally make schedule devices be influenced by priority... (Sort devices by priority?)
     optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
     data, results = optimization.solve_schedule_devices(
         power_0_5kw_and_1kw, devices_list
@@ -361,7 +368,6 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
         "test battery",
         1000,
         4000,
-        2,
         {"name": "test_user", "token": ""},
     )
     devices_list: list[SocketDevice | Battery] = [test_socket, test_battery]
@@ -436,7 +442,6 @@ def test_maximum_capacity_of_battery(power_1kw, request):
             "test battery",
             1000,
             600,
-            1,
             {"name": "test_user", "token": ""},
         )
     ]
@@ -623,8 +628,72 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
     ]
 
 
-# TODO: Create test for negative power forecast where battery discharges.
+def test_battery_discharge(power_1kw_neg_1kw, request):
+    """
+    The battery should be scheduled to turn on for the entire duration, because it can discharge all energy.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        Battery(
+            "",
+            "HWE-BAT",
+            "test battery",
+            1000,
+            1000,
+            {"name": "test_user", "token": ""},
+        )
+    ]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(power_1kw_neg_1kw, devices_list)
+    if request.config.getoption("--debug-scheduler"):
+        print_schedule_results(data, results)
+    df_schedules = results[-1].df_variables
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == [
+        1,
+        1,
+        -1,
+        -1,
+    ]
 
 
-# TODO: Implement logic to substract a constant from the prediced power based on the difference between predicted power from solar
-# and the actual available power at the current moment due to e.g. other devices or inaccurate prediction of available solar.
+def test_battery_discharge_with_socket(power_1kw_neg_1_5kw_pos_2kw, request):
+    """
+    The battery should first charge then discharge, at the end there should be enough energy left to charge the socket.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        Battery(
+            "",
+            "HWE-BAT",
+            "test battery",
+            1000,
+            1000,
+            {"name": "test_user", "token": ""},
+        ),
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 3000, 750, 2, True, delta_t=DELTA_T_TEST
+        ),
+    ]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_1kw_neg_1_5kw_pos_2kw, devices_list
+    )
+    if request.config.getoption("--debug-scheduler"):
+        print_schedule_results(data, results)
+    df_schedules = results[-1].df_variables
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == pytest.approx(
+        [
+            1,
+            1,
+            -1,
+            -1,
+        ]
+    )
+    assert df_schedules[
+        f"schedule {devices_list[1].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            0,
+            0,
+            0,
+            1,
+        ]
+    )
