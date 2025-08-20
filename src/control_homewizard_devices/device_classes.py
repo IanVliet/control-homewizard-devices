@@ -177,6 +177,15 @@ class SocketDevice(CompleteDevice):
                 # If the socket is on and the power usage is below the full power ratio,
                 # we consider it fully charged
                 self.energy_stored = self.energy_capacity
+            elif (
+                self.inst_state
+                and self.inst_power_usage >= IS_FULL_POWER_RATIO * self.max_power_usage
+                and not self.updated_state
+            ):
+                # If the socket is and the power usage is above the expected power usage of a full device,
+                # and the state is not set to the state determined by the scheduler,
+                # we assume that a user has turned a socket on and we have detected that the device is not (or no longer) fully charged
+                self.energy_stored = 0.0
             else:
                 self.energy_stored += (
                     self.inst_power_usage * PERIODIC_SLEEP_DURATION / 3600
