@@ -1,0 +1,41 @@
+{
+    "devices": [
+        {
+            "device_name": "Example device name",
+            "device_type": "HWE-SKT",
+            "ip_address": "192.0.2.1 (replace with actual IP)",
+            "max_power_usage": 100,
+            "energy_capacity": 1000,
+            "priority": 1,
+            "daily_need": true
+        },
+        {
+            "device_name": "P1 meter",
+            "device_type": "HWE-P1",
+            "ip_address": "192.0.2.1 (replace with actual IP)"
+        },
+        {
+            "device_name": "Battery",
+            "device_type": "HWE-BAT",
+            "ip_address": "192.0.2.1 (replace with actual IP)",
+            "max_power_usage": 800,
+            "energy_capacity": 2700,
+            "user_info": {
+                "name": "local/name (replace with actual name)",
+                "token": "(replace with actual token)"
+            }
+        }
+    ],
+    "solar panels": [
+        {
+            "name": "Solar panel (replace with actual properties)",
+            "quartz_parameters": {
+                "latitude": 0.0,
+                "longitude": 0.0,
+                "capacity_kwp": 1.0,
+                "tilt": 0,
+                "orientation": 180
+            }
+        }
+    ]
+}
