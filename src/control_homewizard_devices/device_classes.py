@@ -187,6 +187,7 @@ class SocketDevice(CompleteDevice):
                 # we assume that a user has turned a socket on and we have detected that the device is not (or no longer) fully charged
                 self.energy_stored = 0.0
             else:
+                # Note: Updates with the constant sleep time for simplicity and due to the energy stored of the sockets (measurement.total_power_import_kwh) only having W precision.
                 self.energy_stored += (
                     self.inst_power_usage * PERIODIC_SLEEP_DURATION / 3600
                 )
