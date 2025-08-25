@@ -22,6 +22,7 @@ import sys
 from quartz_solar_forecast.forecast import run_forecast
 from datetime import datetime
 import pandas as pd
+import signal
 
 
 CONFIG_ENV_VAR = "MYPROJECT_CONFIG_PATH"
@@ -247,8 +248,27 @@ async def main(controller: DeviceController):
             device.hwe_device = await stack.enter_async_context(device.get_HWE_class())
             hwe_devices.append(device.hwe_device)
 
+        loop = asyncio.get_running_loop()
+        main_task = asyncio.create_task(main_loop(controller))
+
+        def shutdown(sig: signal.Signals):
+            controller.logger.info(f"Received {sig.name}, cancelling main loop...")
+            main_task.cancel()
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, shutdown, sig)
+                controller.logger.info(
+                    f"Succesfully added signal hanndler for {sig.name}."
+                )
+            except NotImplementedError:
+                controller.logger.info(
+                    f"On windows, skipped adding signal handler for {sig.name}"
+                )
+                pass
+
         try:
-            await main_loop(controller)
+            await main_task
         except asyncio.CancelledError:
             controller.logger.info("Main loop cancelled, shutting down...")
         except Exception as e:
