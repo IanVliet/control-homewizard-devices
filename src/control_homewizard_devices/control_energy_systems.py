@@ -1,21 +1,21 @@
 import asyncio
 import os
-from .utils import (
+from control_homewizard_devices.utils import (
     setup_logger,
     initialize_devices,
     initialize_solarpanel_sites,
     ZonedTime,
 )
-from .device_classes import (
+from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
 )
-from .schedule_devices import (
+from control_homewizard_devices.schedule_devices import (
     DeviceSchedulingOptimization,
     Variables,
     ColNames,
 )
-from .constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
+from control_homewizard_devices.constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
 from contextlib import AsyncExitStack
 import sys
 

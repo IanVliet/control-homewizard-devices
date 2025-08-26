@@ -1,5 +1,5 @@
 import logging
-from .device_classes import (
+from control_homewizard_devices.device_classes import (
     CompleteDevice,
     SocketDevice,
     P1Device,

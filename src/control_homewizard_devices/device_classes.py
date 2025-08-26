@@ -1,9 +1,13 @@
 from homewizard_energy import HomeWizardEnergy
-from .hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
+from control_homewizard_devices.hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
 import logging
 from dataclasses import dataclass
 
-from .constants import DELTA_T, IS_FULL_POWER_RATIO, PERIODIC_SLEEP_DURATION
+from control_homewizard_devices.constants import (
+    DELTA_T,
+    IS_FULL_POWER_RATIO,
+    PERIODIC_SLEEP_DURATION,
+)
 
 
 class CompleteDevice:

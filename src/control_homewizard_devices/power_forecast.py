@@ -21,7 +21,7 @@ if __name__ == "__main__":
         df_forecast.rename(columns={"power_kw": f"power_kw ({name})"}, inplace=True)
         list_of_predictions.append(df_forecast)
     df = pd.concat(list_of_predictions, axis=1)
-    df.to_csv("data/solar_prediction_20250817.csv")
+    df.to_csv("data/solar_prediction.csv")
     fig = px.line(
         df,
         x=df.index,

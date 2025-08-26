@@ -2,16 +2,16 @@ import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
 import time
-from .schedule_devices import (
+from control_homewizard_devices.schedule_devices import (
     DeviceSchedulingOptimization,
     print_schedule_results,
 )
-from .device_classes import SocketDevice, Battery
+from control_homewizard_devices.device_classes import SocketDevice, Battery
 from pathlib import Path
 import argparse
 
 DELTA_T_BENCHMARK = 0.25  # 15 minutes in hours
-
+DATA_FILENAME = "solar_prediction.csv"
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--debug-scheduler",
@@ -52,7 +52,7 @@ def get_power_dataframe(size: int, power_kw=1) -> pd.DataFrame:
 def get_solar_prediction_dataframe(size: int) -> pd.DataFrame:
     base_dir = Path(__file__).parent.parent.parent
     df_solar_prediction = pd.read_csv(
-        base_dir / "data" / "solar_prediction.csv", index_col=0, parse_dates=True
+        base_dir / "data" / DATA_FILENAME, index_col=0, parse_dates=True
     )
     df_solar_prediction.index = pd.to_datetime(df_solar_prediction.index)
     date_0800 = (

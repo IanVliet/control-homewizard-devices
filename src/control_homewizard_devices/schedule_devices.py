@@ -1,6 +1,6 @@
 from math import ceil
 import pandas as pd
-from .device_classes import (
+from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
     CompleteDevice,
