@@ -265,7 +265,6 @@ class DeviceSchedulingOptimization:
                     ]
                     > 0
                 ):
-                    print(available_power[t_e])
                     if available_power[t_e] < 0:
                         # If available power is negative, the battery discharges.
                         self.discharge_batteries_at_timestep(
