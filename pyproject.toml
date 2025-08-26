@@ -27,6 +27,7 @@ orjson = "^3.11.2"
 quartz-solar-forecast = "^1.1.18"
 plotly = "^6.3.0"
 huggingface-hub = "0.17.3"
+ruff = "^0.12.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
