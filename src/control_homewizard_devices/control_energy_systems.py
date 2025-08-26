@@ -111,7 +111,8 @@ class DeviceController:
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
             self.logger.info(
-                "A new day has arrived so the energy stored in the sockets is set back to 0.0"
+                "A new day has arrived so the energy stored "
+                "in the sockets is set back to 0.0"
             )
 
     async def periodic_schedule_update(self):
@@ -163,10 +164,12 @@ class DeviceController:
                 # Slice the solar forecast data to the next forecast time.
                 df_solar_slice = self.df_solar_forecast.loc[now:next_forecast_time]
                 logger.info(
-                    f"Predicted available solar power {df_solar_slice.iloc[0].item() * 1000} W"
+                    "Predicted available solar power "
+                    f"{df_solar_slice.iloc[0].item() * 1000} W"
                 )
                 logger.info(
-                    f"Solar forecast data available for the next {len(df_solar_slice)} time steps."
+                    "Solar forecast data available "
+                    f"for the next {len(df_solar_slice)} time steps."
                 )
                 # Available power is defined as - total power.
                 diff = df_solar_slice.iloc[0] + total_power / 1000  # Convert kW to W
@@ -179,7 +182,8 @@ class DeviceController:
                 )
                 self.schedule_determine_socket_states(results)
                 logger.info(
-                    "===== socket states determined based on schedule produced with solar forecast ====="
+                    "===== socket states determined based on schedule "
+                    "produced with solar forecast ====="
                 )
                 return
             except Exception as e:
@@ -187,19 +191,23 @@ class DeviceController:
 
             if self.df_solar_forecast is None:
                 logger.warning(
-                    "No solar forecast data available, using simple scheduling based on currently available power."
+                    "No solar forecast data available, "
+                    "using simple scheduling based on currently available power."
                 )
             elif len(self.df_solar_forecast) == 0:
                 logger.warning(
-                    "Solar forecast data is empty, using simple scheduling based on currently available power."
+                    "Solar forecast data is empty, "
+                    "using simple scheduling based on currently available power."
                 )
             else:
                 logger.info(
-                    "Falling back to simple scheduling based on currently available power."
+                    "Falling back to simple scheduling "
+                    "based on currently available power."
                 )
             self.simple_determine_socket_states(total_power)
             logger.info(
-                "===== socket states determined based on currently available power ====="
+                "===== socket states determined "
+                "based on currently available power ====="
             )
 
     def schedule_determine_socket_states(self, results: list[Variables]):

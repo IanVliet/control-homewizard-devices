@@ -1,5 +1,7 @@
-# For python 3.11 (which is used for the raspberry pi), I was not able to use the newest version of the python-homewizard-energy.
-# Therefore, to be able to still communicate with a Plug-In battery, I modified the existing models.py code from the github:
+# For python 3.11 (which is used for the raspberry pi),
+# I was not able to use the newest version of the python-homewizard-energy.
+# Therefore, to be able to still communicate with a Plug-In battery,
+# I modified the existing models.py code from the github:
 # https://github.com/homewizard/python-homewizard-energy/tree/main.
 # Licensed under the Apache License, Version 2.0
 
@@ -9,16 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
 from typing import Any
 
 from awesomeversion import AwesomeVersion
 from mashumaro.config import BaseConfig
-from mashumaro.exceptions import MissingField
 from mashumaro.mixins.orjson import DataClassORJSONMixin
 from mashumaro.types import SerializationStrategy
 
-from .const_wrapper import LOGGER, MODEL_TO_ID, MODEL_TO_NAME, Model
+from .const_wrapper import MODEL_TO_ID, MODEL_TO_NAME
 from .utils_wrapper import get_awesome_version
 
 
@@ -245,7 +245,7 @@ class Measurement(BaseModel):
 
         Returns:
             A datetime object.
-        """
+        """  # noqa: E501
         if isinstance(timestamp, int):
             # V1 API uses int for timestamp
             return datetime.strptime(str(timestamp), "%y%m%d%H%M%S")

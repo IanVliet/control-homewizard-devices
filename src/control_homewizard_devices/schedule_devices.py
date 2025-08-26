@@ -109,7 +109,8 @@ class Variables:
         """
         self.df_variables = pd.DataFrame(index=data.df_power_interpolated.index)
         for device in data.devices_list:
-            # in schedule: a device with -1 provides power (e.g. a battery discharging), 0 a device does nothing, 1 a device consumes power
+            # in schedule: a device with -1 provides power (e.g. a battery discharging),
+            # 0 a device does nothing, 1 a device consumes power
             self.df_variables[ColNames.state(device)] = 0.0
             self.df_variables[ColNames.energy_stored(device)] = device.energy_stored
 
@@ -141,7 +142,8 @@ class DeviceSchedulingOptimization:
         results: list[Variables] = []
         self.data = ScheduleData(df_power, self.delta_t, socket_and_battery_list)
         self.variables = Variables(self.data)
-        # Predicted power --> Available power taking into account already scheduled devices.
+        # Predicted power -->
+        # Available power taking into account already scheduled devices.
 
         # Potential options for scheduling
         # 1. Schedule if enough available power.
@@ -162,8 +164,10 @@ class DeviceSchedulingOptimization:
             if device_full:
                 continue
             # Otherwise try option 2.
-            # 2. Schedule if the batteries can be used to schedule the devices without using power from the grid.
-            # --- Find the timesteps where the battery can be used to provide enough power for the device ---
+            # 2. Schedule if the batteries can be used to schedule the devices
+            # without using power from the grid.
+            # --- Find the timesteps where the battery can be used
+            # to provide enough power for the device ---
             if len(self.data.battery_list) > 0:
                 device_full = self.schedule_device_with_battery(device, charge_duration)
                 if device_full:
@@ -188,7 +192,8 @@ class DeviceSchedulingOptimization:
 
     def get_charge_duration(self, device: SocketDevice) -> int:
         """
-        Calculate the number of timesteps needed to charge the device to its full capacity.
+        Calculate the number of timesteps needed
+        to charge the device to its full capacity.
         """
         return int(
             ceil(
@@ -230,10 +235,12 @@ class DeviceSchedulingOptimization:
         min_diff = float("inf")
         best_temp_df_variables = df_variables.copy()
         for t_s in range(self.data.number_timesteps):
-            # Charge the batteries at timestep t_s (previous iterations ensure that the batteries are charged up to t_s)
+            # Charge the batteries at timestep t_s
+            # (previous iterations ensure that the batteries are charged up to t_s)
             self.charge_batteries_at_timestep(t_s, df_variables_battery_charged)
             temp_df_variables = df_variables_battery_charged.copy()
-            # Create a numpy array of available power for the scenario where the batteries only charge until t_s; stopping afterwards.
+            # Create a numpy array of available power for the scenario
+            # where the batteries only charge until t_s; stopping afterwards.
             available_power = temp_df_variables[ColNames.AVAILABLE_POWER].to_numpy(
                 copy=True
             )
@@ -246,7 +253,9 @@ class DeviceSchedulingOptimization:
                         ColNames.energy_stored(self.data.aggregate_battery)
                     ),
                 ]
-                # If batteries cannot provide enough power or the device is already scheduled --> Charge/discharge the batteries during this step
+                # If batteries cannot provide enough power
+                # or the device is already scheduled -->
+                # Charge/discharge the batteries during this step
                 if (
                     needed_power * self.delta_t > energy_stored
                     or needed_power > self.data.aggregate_battery.max_power_usage
@@ -266,7 +275,8 @@ class DeviceSchedulingOptimization:
                         self.charge_batteries_at_timestep(t_e, temp_df_variables)
                     continue
 
-                # If battery has enough charge to provide the needed power (device.max_power_usage - available power) --> schedule the device
+                # If battery has enough charge to provide the needed power
+                # (device.max_power_usage - available power) --> schedule the device
 
                 self.discharge_batteries_at_timestep(
                     needed_power, t_e, temp_df_variables
@@ -407,7 +417,8 @@ class DeviceSchedulingOptimization:
     def charge_batteries_remaining(self):
         """
         Charge and uncharge the batteries with the remaining available power.
-        (Charges in case available power is positive, uncharges in case available power is negative.)
+        (Charges in case available power is positive,
+        uncharges in case available power is negative.)
         This is called after all devices have been scheduled.
         """
         df_variables = self.variables.df_variables
@@ -478,7 +489,7 @@ def print_schedule_results(schedule_data: ScheduleData, results: list[Variables]
     """
     Print the results of the optimization.
     """
-    for phase_number, result in enumerate(results):
+    for result in results:
         print(result.df_variables.to_string(index=False, float_format="%.3f"))
 
 

@@ -1,5 +1,7 @@
-# For python 3.11 (which is used for the raspberry pi), I was not able to use the newest version of the python-homewizard-energy.
-# Therefore, to be able to still communicate with a Plug-In battery, I modified the existing v2/__init__.py from the github:
+# For python 3.11 (which is used for the raspberry pi),
+# I was not able to use the newest version of the python-homewizard-energy.
+# Therefore, to be able to still communicate with a Plug-In battery,
+# I modified the existing v2/__init__.py from the github:
 # https://github.com/homewizard/python-homewizard-energy/tree/main.
 # Licensed under the Apache License, Version 2.0
 
@@ -24,7 +26,7 @@ from aiohttp.client import (
     ClientTimeout,
     TCPConnector,
 )
-from aiohttp.hdrs import METH_DELETE, METH_GET, METH_POST, METH_PUT
+from aiohttp.hdrs import METH_GET, METH_POST, METH_PUT
 from mashumaro.exceptions import InvalidFieldValue, MissingField
 
 from .const_wrapper import LOGGER
@@ -32,7 +34,6 @@ from homewizard_energy.errors import (
     DisabledError,
     NotFoundError,
     RequestError,
-    UnsupportedError,
 )
 from .errors_wrapper import InvalidUserNameError, ResponseError, UnauthorizedError
 
@@ -205,7 +206,8 @@ class HomeWizardEnergyV2(HomeWizardEnergy):
 
     async def _get_ssl_context(self) -> ssl.SSLContext:
         """
-        Get a clientsession that is tuned for communication with the HomeWizard Energy Device
+        Get a clientsession that is tuned for communication
+        with the HomeWizard Energy Device
         """
 
         def _build_ssl_context() -> ssl.SSLContext:
@@ -260,11 +262,13 @@ class HomeWizardEnergyV2(HomeWizardEnergy):
                 LOGGER.debug("%s, %s", resp.status, await resp.text("utf-8"))
         except asyncio.TimeoutError as exception:
             raise RequestError(
-                f"Timeout occurred while connecting to the HomeWizard Energy device at {self.host}"
+                "Timeout occurred while connecting "
+                f"to the HomeWizard Energy device at {self.host}"
             ) from exception
         except (ClientError, ClientResponseError) as exception:
             raise RequestError(
-                f"Error occurred while communicating with the HomeWizard Energy device at {self.host}"
+                "Error occurred while communicating "
+                f"with the HomeWizard Energy device at {self.host}"
             ) from exception
 
         match resp.status:

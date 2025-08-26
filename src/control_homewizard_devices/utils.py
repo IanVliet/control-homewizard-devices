@@ -22,7 +22,8 @@ def setup_logger():
         "--log-level",
         type=str,
         default="INFO",
-        help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). Default is INFO.",
+        help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). "
+        "Default is INFO.",
         choices=[
             "DEBUG",
             "INFO",
@@ -59,13 +60,15 @@ class ZonedTime:
 
     def at_date(self, d: date) -> datetime:
         """
-        Returns a datetime object for the given date with the time set to the hour and minute of this ZonedTime.
+        Returns a datetime object for the given date
+        with the time set to the hour and minute of this ZonedTime.
         """
         return datetime.combine(d, time(self.hour, self.minute), tzinfo=self.tz)
 
     def at_next_date(self, d: date) -> datetime:
         """
-        Returns a datetime object for the next occurrence of this ZonedTime after the given date.
+        Returns a datetime object for the next occurrence of this ZonedTime
+        after the given date.
         If the time has already passed today, it will return the time for tomorrow.
         """
         next_date = (
@@ -75,7 +78,8 @@ class ZonedTime:
 
     def at_naive_date(self, d: date) -> datetime:
         """
-        Returns a naive datetime object for the given date with the time set to the hour and minute of this ZonedTime.
+        Returns a naive datetime object for the given date
+        with the time set to the hour and minute of this ZonedTime.
         """
         return datetime.combine(d, time(self.hour, self.minute))
 

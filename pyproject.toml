@@ -13,9 +13,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 license = "MIT"
-packages = [
-  { include = "control_homewizard_devices", from = "src" },
-]
+packages = [{ include = "control_homewizard_devices", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "3.11.2"
@@ -27,19 +25,22 @@ orjson = "^3.11.2"
 quartz-solar-forecast = "^1.1.18"
 plotly = "^6.3.0"
 huggingface-hub = "0.17.3"
-ruff = "^0.12.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
+ruff = "^0.12.10"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [
-  "ignore::pydantic.warnings.PydanticDeprecatedSince20:huggingface_hub.*"
+  "ignore::pydantic.warnings.PydanticDeprecatedSince20:huggingface_hub.*",
 ]
 
 [tool.ruff]
 target-version = "py311"
+line-length = 88
+lint.select = ["E", "F", "W", "C", "B"]
+exclude = ["__pycache__"]
 
 [tool.poetry.scripts]
 myservice = "control_homewizard_devices.control_energy_systems:entrypoint"

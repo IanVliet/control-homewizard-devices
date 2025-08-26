@@ -51,9 +51,11 @@ class CompleteDevice:
     async def perform_measurement(self, logger: logging.Logger):
         """
         Perform a measurement for the device.
-        This method should be overridden in subclasses to implement specific measurement logic.
+        This method should be overridden in subclasses
+        to implement specific measurement logic.
 
-        For example, certain devices would also update the energy stored based on the instantaneous power usage or state of charge.
+        For example, certain devices would also update the energy stored
+        based on the instantaneous power usage or state of charge.
         """
         if self.hwe_device is not None:
             # Get device information, like firmware version
@@ -144,7 +146,7 @@ class SocketDevice(CompleteDevice):
     async def perform_measurement(self, logger: logging.Logger):
         """
         Perform a measurement for the socket device.
-        This method gets the instantaneous power usage, current, and state of the socket.
+        Gets the instantaneous power usage, current, and state of the socket.
         It also updates the energy stored based on the instantaneous power usage.
         """
         if self.hwe_device is not None:
@@ -186,12 +188,17 @@ class SocketDevice(CompleteDevice):
                 and self.inst_power_usage >= IS_FULL_POWER_RATIO * self.max_power_usage
                 and not self.updated_state
             ):
-                # If the socket is and the power usage is above the expected power usage of a full device,
+                # If the socket is on and the power usage is
+                # above the expected power usage of a full device,
                 # and the state is not set to the state determined by the scheduler,
-                # we assume that a user has turned a socket on and we have detected that the device is not (or no longer) fully charged
+                # we assume that a user has turned a socket on
+                # and we have detected that the device is not
+                # (or no longer) fully charged
                 self.energy_stored = 0.0
             else:
-                # Note: Updates with the constant sleep time for simplicity and due to the energy stored of the sockets (measurement.total_power_import_kwh) only having W precision.
+                # Note: Updates with the constant sleep time for simplicity
+                # and due to the energy stored of the sockets
+                # (measurement.total_power_import_kwh) only having W precision.
                 self.energy_stored += (
                     self.inst_power_usage * PERIODIC_SLEEP_DURATION / 3600
                 )
@@ -200,8 +207,10 @@ class SocketDevice(CompleteDevice):
     def get_instantaneous_power(self):
         """
         For a socket a positive power indicates the power used by the socket,
-        which can be made free by turning the socket off --> therefore this power should count to available power.
-        Since we define available power as negative power the function should return -power
+        which can be made free by turning the socket off -->
+        therefore this power should count to available power.
+        Since we define available power as negative power
+         the function should return -power
         """
         if self.inst_power_usage is None:
             return None
@@ -292,7 +301,8 @@ class Battery(CompleteDevice):
 
 class DeviceSchedulePolicy:
     """
-    Data class for fields determining the properties of the variables used when scheduling devices based on power forecasts.
+    Data class for fields determining the properties of the variables used
+    when scheduling devices based on power forecasts.
     """
 
     def __init__(self, device: CompleteDevice) -> None:
@@ -302,7 +312,8 @@ class DeviceSchedulePolicy:
 
 class BatterySchedulePolicy(DeviceSchedulePolicy):
     """
-    Class for fields determining the properties of the variables used when scheduling batteries based on power forecasts.
+    Class for fields determining the properties of the variables used
+    when scheduling batteries based on power forecasts.
     """
 
     def __init__(self, device: Battery) -> None:
@@ -312,7 +323,8 @@ class BatterySchedulePolicy(DeviceSchedulePolicy):
 
 class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
     """
-    Class for fields determining the properties of the variables used when scheduling sockets based on power forecasts.
+    Class for fields determining the properties of the variables used
+    when scheduling sockets based on power forecasts.
     """
 
     def __init__(self, device: SocketDevice, delta_t: int | float) -> None:

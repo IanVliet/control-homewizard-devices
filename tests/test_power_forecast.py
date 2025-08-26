@@ -92,7 +92,8 @@ def test_single_device_only_on_needed(power_1kw, request):
 
 def test_single_socket_only_on_optional(power_1kw, request):
     """
-    The socket should be scheduled to turn on for the entire duration, because there is enough power and the socket can store all energy.
+    The socket should be scheduled to turn on for the entire duration,
+    because there is enough power and the socket can store all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -115,7 +116,8 @@ def test_single_socket_only_on_optional(power_1kw, request):
 
 def test_single_battery_only_on(power_1kw, request):
     """
-    The battery should be scheduled to turn on for the entire duration, because there is enough power and the battery can store all energy.
+    The battery should be scheduled to turn on for the entire duration,
+    because there is enough power and the battery can store all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
         Battery(
@@ -146,7 +148,8 @@ def test_single_battery_only_on(power_1kw, request):
 # Tests to ensure devices are turned on as early as possible.
 def test_single_device_on_and_off(power_1kw, request):
     """
-    The socket should be scheduled to turn on at the beginning but not at the end, because there is enough power available, but the device cannot store all energy.
+    The socket should be scheduled to turn on at the beginning but not at the end,
+    because there is enough power available, but the device cannot store all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -169,9 +172,11 @@ def test_single_device_on_and_off(power_1kw, request):
 
 def test_charge_battery_until_full(power_1kw, request):
     """
-    The battery should be expected to charge until full as quickly as possible, but not discharge unnessarily.
+    The battery should be expected to charge until full as quickly as possible,
+    but not discharge unnessarily.
     """
-    # Also why if it is descending is it in the right order, and if it ascending power it is in the opposite order?
+    # Also why if it is descending is it in the right order,
+    # and if it ascending power it is in the opposite order?
     devices_list: list[SocketDevice | Battery] = [
         Battery(
             "",
@@ -196,7 +201,8 @@ def test_charge_battery_until_full(power_1kw, request):
     ]
 
 
-# Test to ensure a needed device is turned on before an optional device is turned on even when this would require power from the grid.
+# Test to ensure a needed device is turned on before an optional device is turned on
+# even when this would require power from the grid.
 def test_schedule_second_device_only(power_0_5kw_and_1kw, request):
     """
     The first device with a smaller capacity should not be turned on at all,
@@ -246,13 +252,16 @@ def test_schedule_second_device_only(power_0_5kw_and_1kw, request):
     ]
 
 
-# Test to ensure a needed device is turned on later if the device can still be fully charged.
+# Test to ensure a needed device is turned on later
+# if the device can still be fully charged.
 def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
     power_0_5kw_and_1kw, request
 ):
     """
-    The first device with small capacity should be turned on for the first half of the prediction.
-    The second device with larger capacity and higher priority should be turned on when the predicted available power is higher.
+    The first device with small capacity should be turned on
+    for the first half of the prediction.
+    The second device with larger capacity and higher priority should be turned on
+    when the predicted available power is higher.
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -297,12 +306,14 @@ def test_sufficient_power_for_spread_out_activation_one_optional_one_needed(
     ]
 
 
-# Test for checking if load is spread out when multiple devices are needed, but enough power is available.
+# Test for checking if load is spread out when multiple devices are needed,
+# but enough power is available.
 def test_sufficient_power_for_spread_out_activation_two_needed_devices(
     power_0_5kw_and_1kw, request
 ):
     """
-    Although both devices are needed, the devices should not be on at the same time since they can be on after each other.
+    Although both devices are needed, the devices should not be on at the same time
+    since they can be on after each other.
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -347,10 +358,12 @@ def test_sufficient_power_for_spread_out_activation_two_needed_devices(
     ]
 
 
-# Test to ensure a battery is charged first before a second device is turned on if the device would have to use power from the grid otherwise.
+# Test to ensure a battery is charged first before a second device is turned on
+# if the device would have to use power from the grid otherwise.
 def test_schedule_battery_charge_second_device_charge(power_1kw, request):
     """
-    First the battery should be turned on until enough energy is available such that second device can be charged.
+    First the battery should be turned on until enough energy is available
+    such that second device can be charged.
     """
     test_socket = SocketDevice(
         "",
@@ -376,7 +389,8 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
     if request.config.getoption("--debug-scheduler"):
         print_schedule_results(data, results)
     df_schedules = results[-1].df_variables
-    # expects switching between states to occur as little as possible (so 0, 0, 1, 1 instead of 0, 1, 0, 1 for the socket)
+    # expects switching between states to occur as little as possible
+    # (so 0, 0, 1, 1 instead of 0, 1, 0, 1 for the socket)
     assert df_schedules[f"schedule {devices_list[0].device_name}"].to_list() == [
         0,
         0,
@@ -391,13 +405,17 @@ def test_schedule_battery_charge_second_device_charge(power_1kw, request):
     ]
 
 
-# Test if load is still spread out when there is not enough power available for both devices.
+# Test if load is still spread out
+# when there is not enough power available for both devices.
 def test_insufficient_power_for_activation_two_needed_devices(
     power_0_5kw_and_1kw, request
 ):
     """
-    Although both devices are needed, the devices should not be on at the same time since there is not enough power.
-    If it does not influence the power balance the devices should be in the same state as long as possible (on until full, then off).
+    Although both devices are needed, the devices should not be on at the same time
+    since there is not enough power.
+    If it does not influence the power balance
+    the devices should be in the same state as long as possible
+    (on until full, then off).
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -431,7 +449,8 @@ def test_insufficient_power_for_activation_two_needed_devices(
 # Tests for checking if maximum capacity of devices is taken into account properly.
 def test_maximum_capacity_of_battery(power_1kw, request):
     """
-    The battery should not be scheduled to turn on for the entire duration, because it cannot store all energy.
+    The battery should not be scheduled to turn on for the entire duration,
+    because it cannot store all energy.
     However, it should charge to its maximum capacity by using a ratio in the schedule.
     (In practice the battery will use full power until it reaches its maximum capacity.)
     """
@@ -462,9 +481,12 @@ def test_maximum_capacity_of_battery(power_1kw, request):
 
 def test_maximum_storage_of_sockets(power_1kw, request):
     """
-    The socket should not be scheduled to turn on for the entire duration, because it cannot store all energy.
-    However, it should charge to its maximum capacity by overcharging for one extra step.
-    (In practice the device will stop consuming power when it reaches its maximum capacity.)
+    The socket should not be scheduled to turn on for the entire duration,
+    because it cannot store all energy.
+    However, it should charge to its maximum capacity
+    by overcharging for one extra step.
+    (In practice the device will stop consuming power
+    when it reaches its maximum capacity.)
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -491,7 +513,8 @@ def test_maximum_storage_of_sockets(power_1kw, request):
     ]
 
 
-# Test for cases of not perfectly matching available power with the power usage of the devices.
+# Test for cases of not perfectly matching available power
+# with the power usage of the devices.
 def test_not_perfectly_matching_power(power_1kw, request):
     """
     The socket should only be turned on for the first part
@@ -515,10 +538,12 @@ def test_not_perfectly_matching_power(power_1kw, request):
     ]
 
 
-# Test for cases where an optional device cannot be fully charged, but is still charged as much as possible.
+# Test for cases where an optional device cannot be fully charged,
+# but is still charged as much as possible.
 def test_optional_device_not_fully_charged(power_descending, request):
     """
-    The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
+    The socket should be scheduled to turn on for the first two steps only,
+    resulting in the device not being fully charged,
     because there is not enough power available in later stages.
     """
     devices_list: list[SocketDevice | Battery] = [
@@ -541,10 +566,13 @@ def test_optional_device_not_fully_charged(power_descending, request):
 
 def test_devices_order_despite_power(power_descending, request):
     """
-    The socket with highest priority (smallest number) should be scheduled to turn on for the first two steps
-    and the second socket for first and third step (since these have the highest available power remaining),
+    The socket with highest priority (smallest number) should be scheduled
+    to turn on for the first two steps
+    and the second socket for first and third step
+    (since these have the highest available power remaining),
     this does not result in the least amount of power going to and from the grid.
-    (The algorithm is not guaranteed to find the optimal solution, but it should be close.)
+    (The algorithm is not guaranteed to find the optimal solution,
+    but it should be close.)
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -573,10 +601,13 @@ def test_devices_order_despite_power(power_descending, request):
     ]
 
 
-# Test for a case where a needed device cannot be fully charged, but is still charged as much as possible. Without resulting in the problem being infeasible.
+# Test for a case where a needed device cannot be fully charged,
+# but is still charged as much as possible.
+# Without resulting in the problem being infeasible.
 def test_needed_device_not_fully_charged(power_ascending, request):
     """
-    The socket should be scheduled to turn on for the first two steps only, resulting in the device not being fully charged,
+    The socket should be scheduled to turn on for the first two steps only,
+    resulting in the device not being fully charged,
     because there is not enough power available in later stages.
     """
     devices_list: list[SocketDevice | Battery] = [
@@ -597,11 +628,14 @@ def test_needed_device_not_fully_charged(power_ascending, request):
     ]
 
 
-# test which considers the use of interpolation (so different delta_t for schedule devices than for the power forecast).
+# test which considers the use of interpolation
+# (so different delta_t for schedule devices than for the power forecast).
 def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
     """
-    The socket should be scheduled to turn on for the first three steps only, resulting in the device being perfectly charged,
-    because there is enough power available and the timestep of delta_t_test/2 doubles the number of timesteps.
+    The socket should be scheduled to turn on for the first three steps only,
+    resulting in the device being perfectly charged,
+    because there is enough power available and
+    the timestep of delta_t_test/2 doubles the number of timesteps.
     """
     devices_list: list[SocketDevice | Battery] = [
         SocketDevice(
@@ -630,7 +664,8 @@ def test_device_on_until_full_different_delta_t(power_1kw_2_delta_t, request):
 
 def test_battery_discharge(power_1kw_neg_1kw, request):
     """
-    The battery should be scheduled to turn on for the entire duration, because it can discharge all energy.
+    The battery should be scheduled to turn on for the entire duration,
+    because it can discharge all energy.
     """
     devices_list: list[SocketDevice | Battery] = [
         Battery(
@@ -657,7 +692,8 @@ def test_battery_discharge(power_1kw_neg_1kw, request):
 
 def test_battery_discharge_with_socket(power_1kw_neg_1_5kw_pos_2kw, request):
     """
-    The battery should first charge then discharge, at the end there should be enough energy left to charge the socket.
+    The battery should first charge then discharge,
+    at the end there should be enough energy left to charge the socket.
     """
     devices_list: list[SocketDevice | Battery] = [
         Battery(

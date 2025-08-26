@@ -1,5 +1,7 @@
-# For python 3.11 (which is used for the raspberry pi), I was not able to use the newest version of the python-homewizard-energy.
-# Therefore, to be able to still communicate with a Plug-In battery, I modified errors.py from the github:
+# For python 3.11 (which is used for the raspberry pi),
+# I was not able to use the newest version of the python-homewizard-energy.
+# Therefore, to be able to still communicate with a Plug-In battery,
+# I modified errors.py from the github:
 # https://github.com/homewizard/python-homewizard-energy/tree/main.
 # Licensed under the Apache License, Version 2.0
 

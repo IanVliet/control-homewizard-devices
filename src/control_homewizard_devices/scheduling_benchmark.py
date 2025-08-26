@@ -24,7 +24,8 @@ parser.add_argument(
     const=10,
     type=int,
     default=None,
-    help="Only obtain a single schedule with the indicated size. Uses the value provided or a default value of 10 if no value is provided.",
+    help="Only obtain a single schedule with the indicated size. "
+    "Uses the value provided or a default value of 10 if no value is provided.",
 )
 args = parser.parse_args()
 
@@ -120,7 +121,10 @@ def run_benchmark():
             break
         if args.single_schedule is not None:
             print(
-                f"single-schedule flag used, stopping benchmark with data size {args.single_schedule}"
+                (
+                    "single-schedule flag used, stopping benchmark with data size "
+                    f"{args.single_schedule}"
+                )
             )
             break
         size *= data_multiplier
