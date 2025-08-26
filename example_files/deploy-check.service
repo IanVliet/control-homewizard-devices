@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Git repo for updates and redeploy if needed
+
+[Service]
+Type=oneshot
+ExecStart=/home/[user name]/projects/homewizard_project/update_and_restart.sh
+WorkingDirectory=/home/[user name]/projects/homewizard_project
+User=[user name]

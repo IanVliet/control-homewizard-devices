@@ -1,0 +1,10 @@
+[Unit]
+Description=Run deploy-check.service every 10 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+Unit=deploy-check.service
+
+[Install]
+WantedBy=timers.target
