@@ -1,0 +1,14 @@
+[Unit]
+Description=control homewizard devices daemon
+Documentation=https://github.com/IanVliet/control-homewizard-devices
+After=network.target
+
+[Service]
+ExecStart=/home/[user name]/.local/bin/poetry run myservice
+WorkingDirectory=/home/[user name]/projects/homewizard_project
+Restart=always
+User=[user name]
+Environment=PATH=/home/[user name]/.local/bin:/usr/bin
+
+[Install]
+WantedBy=multi-user.target
