@@ -18,4 +18,30 @@ The controller also obtains a combined power forecast for the solar panels defin
 The controller periodically (every 30s) requests data from the devices in `config_devices.json`. The data from sockets gives the power usage and state of the device. The the P1 meter combined with sockets and battery give the total power currently available (that is produced by the solar panels and is left over). The data and state is used to update the expected energy stored of each device. The scheduling algorithm is then used to determine which device should be turned at this moment.
 
 ## Config
-The file that should be created in the `config` directory is `config_devices.json`. It contains the relevant information for both the homewizard devices and the solar panels. See `example_config_devices.json` for an example. The properties can/should all be changed to properties of the specific device. Except for `"device_type"` since it should match the device type (one of "HWE-SKT", "HWE-P1" or "HWE-BAT"). To create a user for the homewizard API V2 follow the manual steps at [API V2 examples](https://api-documentation.homewizard.com/docs/v2/authorization#examples).
+The file that should be created in the `config` directory is `config_devices.json`. It contains the relevant information for both the homewizard devices and the solar panels. See `example_config_devices.json` for an example. The properties can/should all be changed to properties of the specific device. Except for `"device_type"` since it should match the device type (one of "HWE-SKT", "HWE-P1" or "HWE-BAT"). To create a user for the homewizard API V2 follow the manual steps at [API V2 examples](https://api-documentation.homewizard.com/docs/v2/authorization#examples). 
+
+## systemd service
+To run the script as a systemd service, there is an example systemd unit file named `hwe_control_script.service` in `example_files`. The file requires changing the [user name] with the user name on the computer and potentially the other parts of the paths.
+
+# Use the project directly
+Assuming poetry is correctly installed on the computer, in the main directory run:
+```
+poetry install
+```
+or if only updates are required:
+```
+poetry sync
+```
+For more information on poetry see [poetry basic usage](https://python-poetry.org/docs/basic-usage/).
+To run the main control_energy_systems.py, you can use the entrypoint defined in the pyproject.toml with:
+```
+poetry run myservice
+```
+To run the tests:
+```
+poetry install --with dev
+poetry run pytest
+```
+(or just `pytest` if the environment is activated ([activate poetry environment](https://python-poetry.org/docs/managing-environments#activating-the-environment)))
+
+The file `scheduling_benchmark.py` can be run after `power_forecast.py` has been run and the filename of the created csv file matches the filename `DATA_FILENAME` in `scheduling_benchmark.py`.
