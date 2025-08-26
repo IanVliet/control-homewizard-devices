@@ -1,0 +1,21 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-deploy-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Push to deploy branch
+        run: |
+          git config user.name "CI Bot"
+          git config user.email "46758238+IanVliet@users.noreply.github.com"
+          git fetch origin
+          git checkout -B deploy
+          git push origin deploy --force
