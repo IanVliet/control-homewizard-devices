@@ -2,8 +2,8 @@
 set -euo pipefail
 # Read username from first argument
 DEPLOY_USER="${1:?Usage: $0 <deploy_user>}"
-REPO_DIR = "/home/$DEPLOY_USER/projects/homewizard-project"
-SERVICE_NAME = "hwe_control_script.service"
+REPO_DIR="/home/$DEPLOY_USER/projects/homewizard_project"
+SERVICE_NAME="hwe_control_script.service"
 
 # Logging helper
 log() {
