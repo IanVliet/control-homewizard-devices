@@ -43,7 +43,7 @@ def setup_logger():
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] - %(message)s")
     logger = logging.getLogger(__name__)
     file_handler = TimedRotatingFileHandler(
-        "app.log", when="midnight", interval=1, backupCount=7
+        "logs/app.log", when="midnight", interval=1, backupCount=7
     )
     file_handler.suffix = "%Y-%m-%d"  # add date to rotated files
     file_handler.setFormatter(formatter)

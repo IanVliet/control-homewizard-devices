@@ -1,6 +1,6 @@
 config/
 data/
-app.log
+logs/
 homewizard_venv
 __pycache__/
 .cache.sqlite
