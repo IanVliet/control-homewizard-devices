@@ -23,6 +23,8 @@ The file that should be created in the `config` directory is `config_devices.jso
 ## systemd service
 To run the script as a systemd service, there is an example systemd unit file named `hwe_control_script.service` in `example_files`. The file requires changing the [user name] with the user name on the computer and potentially the other parts of the paths.
 
+Similarly, there are examples scripts for automatically updating the repository with `deploy-check.service` and `deploy-check.timer`. Only `deploy-check.service` requires changing [user name] with the user name on the computer.
+
 # Use the project directly
 Assuming poetry is correctly installed on the computer, in the main directory run:
 ```
@@ -32,7 +34,11 @@ or if only updates are required:
 ```
 poetry sync
 ```
-For more information on poetry see [poetry basic usage](https://python-poetry.org/docs/basic-usage/).
+For more information on poetry see [poetry basic usage](https://python-poetry.org/docs/basic-usage/). Additionally a directory to store the logs should be created:
+```
+mkdir logs/
+```
+
 To run the main control_energy_systems.py, you can use the entrypoint defined in the pyproject.toml with:
 ```
 poetry run myservice
