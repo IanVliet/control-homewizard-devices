@@ -3,6 +3,6 @@ Description=Check Git repo for updates and redeploy if needed
 
 [Service]
 Type=oneshot
-ExecStart=usr/bin/bash /home/[user name]/projects/homewizard_project/update_and_restart.sh [user name]
-WorkingDirectory=/home/[user name]/projects/homewizard_project
-User=[user name]
+ExecStart=usr/bin/bash /home/[username]/projects/homewizard_project/update_and_restart.sh [username]
+WorkingDirectory=/home/[username]/projects/homewizard_project
+User=[username]
