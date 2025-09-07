@@ -7,4 +7,7 @@
         }
     },
     "ruff.enable": true,
+    "python.analysis.extraPaths": [
+        "./libs/e-Paper/RaspberryPi_JetsonNano/python/lib"
+    ],
 }
