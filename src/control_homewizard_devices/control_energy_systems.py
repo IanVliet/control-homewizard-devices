@@ -15,6 +15,7 @@ from control_homewizard_devices.schedule_devices import (
     Variables,
     ColNames,
 )
+from control_homewizard_devices.e_paper_display import DrawDisplay
 from control_homewizard_devices.constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
 from contextlib import AsyncExitStack
 import sys
@@ -59,6 +60,7 @@ class DeviceController:
         )
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
         self.optimization = DeviceSchedulingOptimization(DELTA_T)
+        self.draw_display = DrawDisplay(self.socket_and_battery_list)
 
     def get_forecast_data(self) -> pd.DataFrame | None:
         """
@@ -129,6 +131,9 @@ class DeviceController:
             logger.info(f"Total available power: {-total_power} W")
 
             self.primary_scheduling_with_fallback(total_power)
+
+            # Update display
+            await self.draw_display.draw_full_update()
 
             async with asyncio.TaskGroup() as tg:
                 for socket in self.sorted_sockets:

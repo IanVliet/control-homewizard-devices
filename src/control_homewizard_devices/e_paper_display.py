@@ -30,7 +30,10 @@ class DrawDisplay:
         try:
             logging.info("Setting up E-paper display (epd) class")
             self.epd = epd4in2_V2.EPD()
-            self.font = ImageFont.truetype("arial.ttf", size=FONT_SIZE)
+            logging.info("Init and clear epd")
+            self.epd.init()
+            self.epd.Clear()
+            self.font = ImageFont.load_default(size=FONT_SIZE)
             self.positions, cols, rows, self.height_all_icons = self.grid_positions()
         except IOError as e:
             logging.error(f"Setup epd failed with error: {e}")
@@ -77,7 +80,7 @@ class DrawDisplay:
 
         return positions, cols, rows, total_height
 
-    def draw_full_update(self):
+    async def draw_full_update(self):
         try:
             logging.info("Attempting full update")
             epd = self.epd
@@ -102,6 +105,12 @@ class DrawDisplay:
                 # add icon
                 icon_y = y + text_height
                 L_image.paste(icon, (x, icon_y), mask=icon)
+            epd.display_4Gray(epd.getbuffer_4Gray(L_image))
+            await asyncio.sleep(5)
+            logging.info("Clear and go to sleep epd")
+            epd.init()
+            epd.Clear()
+            epd.sleep()
 
         except IOError as e:
             logging.error(f"Full draw failed with error: {e}")
