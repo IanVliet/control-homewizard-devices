@@ -144,6 +144,8 @@ if is_raspberry_pi():
                     logger.warning(
                         "Drawing plot skipped, since the df_schedule is None"
                     )
+                else:
+                    logger.info("Drawing plot on E-paper display")
                     fig = go.Figure()
                     fig.add_trace(
                         go.Scatter(
