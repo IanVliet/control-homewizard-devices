@@ -20,8 +20,8 @@ if os.path.exists(waveshare_lib) and waveshare_lib not in sys.path:
 if is_raspberry_pi():
     from waveshare_epd import epd4in2_V2  # noqa: E402
 
-    ICON_SIZE = 64
-    FONT_SIZE = 12
+    ICON_SIZE = 48
+    FONT_SIZE = 16
 
     class DrawDisplay:
         def __init__(
