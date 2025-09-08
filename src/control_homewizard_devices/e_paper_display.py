@@ -48,7 +48,7 @@ if is_raspberry_pi():
             resized_icons: dict[SocketDevice | Battery, Image.Image] = {}
             for device in self.devices:
                 icon_path = os.path.join(
-                    icons_dir, device.device_name.replace(" ", "_"), ".bmp"
+                    icons_dir, f"{device.device_name.replace(' ', '_')}.bmp"
                 )
                 icon = Image.open(icon_path)
                 resized = icon.resize((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)

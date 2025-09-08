@@ -3,6 +3,7 @@ set -euo pipefail
 # Read username from first argument
 DEPLOY_USER="${1:?Usage: $0 <deploy_user>}"
 REPO_DIR="/home/$DEPLOY_USER/projects/homewizard_project"
+POETRY_BIN="/home/$DEPLOY_USER/.local/bin/poetry"
 SERVICE_NAME="hwe_control_script.service"
 
 # Logging helper
@@ -26,7 +27,7 @@ NEW_HASH=$(git rev-parse HEAD)
 if [ "$CURRENT_HASH" != "$NEW_HASH" ]; then
     log "New changes detected: $CURRENT_HASH → $NEW_HASH."
     log "Updating dependencies and restarting service..."
-    poetry install
+    "$POETRY_BIN" install
     sudo systemctl restart "$SERVICE_NAME"
     log "$SERVICE_NAME restarted succesfully"
 else

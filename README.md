@@ -51,4 +51,9 @@ poetry run pytest
 The file `scheduling_benchmark.py` can be run after `power_forecast.py` has been run and the filename of the created csv file matches the filename `DATA_FILENAME` in `scheduling_benchmark.py`.
 
 # E-paper display
-This repository contains the E-paper repository from waveshare [Wavehshare E-paper](https://github.com/waveshareteam/e-Paper/tree/master). 
+This repository contains the E-paper repository from waveshare [Wavehshare E-paper](https://github.com/waveshareteam/e-Paper/tree/master). This should be installed in main repository with:
+```
+mkdir libs
+cd libs/
+git clone https://github.com/waveshareteam/e-Paper.git
+```
