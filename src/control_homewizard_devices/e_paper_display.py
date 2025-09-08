@@ -17,7 +17,7 @@ icons_dir = os.path.join(REPO_ROOT, "icons")
 if os.path.exists(waveshare_lib) and waveshare_lib not in sys.path:
     sys.path.append(waveshare_lib)
 
-from waveshare_epd import epd4in2_V2
+from waveshare_epd import epd4in2_V2  # noqa: E402
 
 ICON_SIZE = 32
 FONT_SIZE = 12
