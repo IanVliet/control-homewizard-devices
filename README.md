@@ -49,3 +49,6 @@ poetry run pytest
 (or just `pytest` instead of `poety run pytest` if the environment is activated ([activate poetry environment](https://python-poetry.org/docs/managing-environments#activating-the-environment)))
 
 The file `scheduling_benchmark.py` can be run after `power_forecast.py` has been run and the filename of the created csv file matches the filename `DATA_FILENAME` in `scheduling_benchmark.py`.
+
+# E-paper display
+This repository contains the E-paper repository from waveshare [Wavehshare E-paper](https://github.com/waveshareteam/e-Paper/tree/master). 
