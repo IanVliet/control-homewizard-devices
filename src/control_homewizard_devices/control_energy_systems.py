@@ -64,7 +64,7 @@ class DeviceController:
         if self.on_raspberry_pi:
             from control_homewizard_devices.e_paper_display import DrawDisplay
 
-            self.draw_display = DrawDisplay(self.socket_and_battery_list)
+            self.draw_display = DrawDisplay(self.socket_and_battery_list, self.logger)
 
     def get_forecast_data(self) -> pd.DataFrame | None:
         """
