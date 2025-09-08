@@ -30,6 +30,7 @@ spidev = { version = ">=3.7,<4.0", markers = 'sys_platform == "linux" and (platf
 gpiozero = { version = ">=2.0.1,<3.0.0", markers = 'sys_platform == "linux" and (platform_machine == "armv7l" or platform_machine == "aarch64")' }
 rpi-gpio = { version = ">=0.7.1,<0.8.0", markers = 'sys_platform == "linux" and (platform_machine == "armv7l" or platform_machine == "aarch64")' }
 lgpio = { version = ">=0.2.2.0,<0.3.0.0", markers = 'sys_platform == "linux" and (platform_machine == "armv7l" or platform_machine == "aarch64")' }
+kaleido = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.1"
