@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 from datetime import datetime, date, time, timedelta
 import argparse
+import platform
 
 DEVICE_TYPE_MAP = {"HWE-SKT": SocketDevice, "HWE-P1": P1Device, "HWE-BAT": Battery}
 
@@ -129,3 +130,17 @@ def initialize_solarpanel_sites(config_json_filepath) -> dict[str, PVSite]:
         sites[name] = site
 
     return sites
+
+
+def is_raspberry_pi():
+    if platform.system() != "Linux":
+        return False
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpuinfo = f.read()
+        # Look for "BCM" or "Raspberry Pi" in cpuinfo
+        if "BCM" in cpuinfo or "Raspberry Pi" in cpuinfo:
+            return True
+    except FileNotFoundError:
+        return False
+    return False

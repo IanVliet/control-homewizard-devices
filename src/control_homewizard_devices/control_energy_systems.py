@@ -5,6 +5,7 @@ from control_homewizard_devices.utils import (
     initialize_devices,
     initialize_solarpanel_sites,
     ZonedTime,
+    is_raspberry_pi,
 )
 from control_homewizard_devices.device_classes import (
     SocketDevice,
@@ -15,7 +16,6 @@ from control_homewizard_devices.schedule_devices import (
     Variables,
     ColNames,
 )
-from control_homewizard_devices.e_paper_display import DrawDisplay
 from control_homewizard_devices.constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
 from contextlib import AsyncExitStack
 import sys
@@ -60,7 +60,11 @@ class DeviceController:
         )
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
         self.optimization = DeviceSchedulingOptimization(DELTA_T)
-        self.draw_display = DrawDisplay(self.socket_and_battery_list)
+        self.on_raspberry_pi = is_raspberry_pi()
+        if self.on_raspberry_pi:
+            from control_homewizard_devices.e_paper_display import DrawDisplay
+
+            self.draw_display = DrawDisplay(self.socket_and_battery_list)
 
     def get_forecast_data(self) -> pd.DataFrame | None:
         """
@@ -132,8 +136,10 @@ class DeviceController:
 
             self.primary_scheduling_with_fallback(total_power)
 
-            # Update display
-            await self.draw_display.draw_full_update()
+            if self.on_raspberry_pi:
+                logger.info("Update E-paper display")
+                # Update display
+                await self.draw_display.draw_full_update()
 
             async with asyncio.TaskGroup() as tg:
                 for socket in self.sorted_sockets:
