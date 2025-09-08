@@ -139,7 +139,7 @@ class DeviceController:
             if self.on_raspberry_pi:
                 logger.info("Update E-paper display")
                 # Update display
-                await self.draw_display.draw_full_update()
+                self.draw_display.draw_full_update()
 
             async with asyncio.TaskGroup() as tg:
                 for socket in self.sorted_sockets:
