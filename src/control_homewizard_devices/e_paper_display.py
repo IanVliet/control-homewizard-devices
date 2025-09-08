@@ -126,13 +126,13 @@ if is_raspberry_pi():
                     text_bbox = draw.textbbox((0, 0), text, font=font)
                     text_w = math.ceil(text_bbox[2] - text_bbox[0])
                     text_h = math.ceil(text_bbox[3] - text_bbox[1])
-                    text_x = x + (self.max_text_width - text_w)
+                    text_x = x + math.ceil((self.max_text_width - text_w) / 2)
                     text_y = y + math.ceil((self.cell_height - text_h) / 2)
                     draw.text((text_x, text_y), text, font=font, fill=0)
 
                     # add icon
-                    icon_x = x + (self.max_text_width - text_w)
-                    icon_y = y + math.ceil((self.cell_height - text_h) / 2)
+                    icon_x = x + self.max_text_width
+                    icon_y = y + math.ceil((self.cell_height - ICON_SIZE) / 2)
                     L_image.paste(icon, (icon_x, icon_y), mask=icon)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
