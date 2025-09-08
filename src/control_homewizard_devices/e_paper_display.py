@@ -24,13 +24,16 @@ if is_raspberry_pi():
     FONT_SIZE = 12
 
     class DrawDisplay:
-        def __init__(self, devices: list[SocketDevice | Battery]) -> None:
+        def __init__(
+            self, devices: list[SocketDevice | Battery], logger: logging.Logger
+        ) -> None:
             self.devices = devices
             self.resized_icons = self.get_resized_icons()
+            self.logger = logger
             try:
-                logging.info("Setting up E-paper display (epd) class")
+                logger.info("Setting up E-paper display (epd) class")
                 self.epd = epd4in2_V2.EPD()
-                logging.info("Init and clear epd")
+                logger.info("Init and clear epd")
                 self.epd.init()
                 self.epd.Clear()
                 self.font = ImageFont.load_default(size=FONT_SIZE)
@@ -38,9 +41,9 @@ if is_raspberry_pi():
                     self.grid_positions()
                 )
             except IOError as e:
-                logging.error(f"Setup epd failed with error: {e}")
+                logger.error(f"Setup epd failed with error: {e}")
             except asyncio.CancelledError:
-                logging.info("Setup epd cancelled")
+                logger.info("Setup epd cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise
 
@@ -84,7 +87,8 @@ if is_raspberry_pi():
 
         async def draw_full_update(self):
             try:
-                logging.info("Attempting full update")
+                logger = self.logger
+                logger.info("Attempting full update")
                 epd = self.epd
                 font = self.font
                 L_image = Image.new("L", (epd.width, epd.height), 255)
@@ -111,14 +115,14 @@ if is_raspberry_pi():
                     L_image.paste(icon, (x, icon_y), mask=icon)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 await asyncio.sleep(5)
-                logging.info("Clear and go to sleep epd")
+                logger.info("Clear and go to sleep epd")
                 epd.init()
                 epd.Clear()
                 epd.sleep()
 
             except IOError as e:
-                logging.error(f"Full draw failed with error: {e}")
+                logger.error(f"Full draw failed with error: {e}")
             except asyncio.CancelledError:
-                logging.info("Full draw cancelled")
+                logger.info("Full draw cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise
