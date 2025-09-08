@@ -7,7 +7,8 @@ import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from control_homewizard_devices.schedule_devices import ColNames
 from control_homewizard_devices.utils import is_raspberry_pi
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 import pandas as pd
 import io
 
@@ -146,22 +147,44 @@ if is_raspberry_pi():
                     )
                 else:
                     logger.info("Drawing plot on E-paper display")
-                    fig = go.Figure()
-                    fig.add_trace(
-                        go.Scatter(
-                            x=df_schedule.index,
-                            y=df_schedule[ColNames.POWER_W],
-                            mode="lines+markers",
-                        )
+                    # --- Matplotlib Figure ---
+                    canvas_width, canvas_height = (
+                        epd.width,
+                        epd.height - self.height_all_icons,
                     )
-                    fig.update_layout(
-                        width=epd.width,
-                        height=epd.height - self.height_all_icons,
-                        margin={"l": 40, "r": 20, "t": 40, "b": 40},
-                    )
-                    img_bytes = fig.to_image(format="png")
-                    img = Image.open(io.BytesIO(img_bytes))
-                    img_l = img.convert("L")
+                    dpi = 100  # dots per inch
+                    fig_width, fig_height = (
+                        canvas_width / dpi,
+                        canvas_height / dpi,
+                    )  # inches
+
+                    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
+
+                    # Plot two columns
+                    df_schedule.plot(ax=ax, y=[ColNames.POWER_W], color=["gray"])
+
+                    # Formatting
+                    ax.set_xlabel("Time")
+                    ax.set_ylabel("Value")
+                    # ax.set_title("Daily Sensor Readings")
+                    ax.grid(False)
+                    ax.set_facecolor("white")
+                    fig.patch.set_facecolor("white")
+                    # Reduce x-axis labels if too many
+                    ax.xaxis.set_major_locator(MaxNLocator(8))
+
+                    # Remove extra padding
+                    fig.tight_layout()
+
+                    # --- Save figure to in-memory PNG ---
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="png")
+                    buf.seek(0)
+                    plt.close(fig)  # free memory
+
+                    # --- Load with Pillow and convert to L mode ---
+                    img = Image.open(buf)
+                    img_l = img.convert("L")  # grayscale
                     L_image.paste(img_l, (0, self.height_all_icons), mask=img_l)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
