@@ -140,7 +140,7 @@ class DeviceController:
                 logger.info("Update E-paper display")
                 # TODO: Update display partially
                 # Update display
-                self.draw_display.draw_full_update()
+                self.draw_display.draw_full_update(self.df_power_prediction)
                 # TODO: Update graph partially of actual available energy only in case
                 # enough time steps have passed since the last timesteps
                 # TODO: Update display fully in case it has been more than 5 times
@@ -190,11 +190,11 @@ class DeviceController:
                 # Available power is defined as - total power.
                 diff = df_solar_slice.iloc[0] + total_power / 1000  # Convert kW to W
                 logger.info(f"Power difference: {diff.item() * 1000} W")
-                df_power_prediction = df_solar_slice - diff
-                logger.debug(f"Power prediction DataFrame:\n{df_power_prediction}")
+                self.df_power_prediction = df_solar_slice - diff
+                logger.debug(f"Power prediction DataFrame:\n{self.df_power_prediction}")
 
                 data, results = self.optimization.solve_schedule_devices(
-                    df_power_prediction, self.socket_and_battery_list
+                    self.df_power_prediction, self.socket_and_battery_list
                 )
                 self.schedule_determine_socket_states(results)
                 logger.info(

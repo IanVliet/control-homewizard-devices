@@ -5,7 +5,11 @@ from PIL import Image, ImageDraw, ImageFont
 import logging
 import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
+from control_homewizard_devices.schedule_devices import ColNames
 from control_homewizard_devices.utils import is_raspberry_pi
+import plotly.graph_objects as go
+import pandas as pd
+import io
 
 CURRENT_DIR = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -104,7 +108,7 @@ if is_raspberry_pi():
                 total_height,
             )
 
-        def draw_full_update(self):
+        def draw_full_update(self, df_schedule: pd.DataFrame):
             try:
                 logger = self.logger
                 logger.info("Attempting full update")
@@ -134,6 +138,29 @@ if is_raspberry_pi():
                     icon_x = x + self.max_text_width
                     icon_y = y + math.ceil((self.cell_height - ICON_SIZE) / 2)
                     L_image.paste(icon, (icon_x, icon_y), mask=icon)
+
+                # TODO: Draw the pandas dataframe via a plot
+                if df_schedule is None:
+                    logger.warning(
+                        "Drawing plot skipped, since the df_schedule is None"
+                    )
+                    fig = go.Figure()
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_schedule.index,
+                            y=df_schedule[ColNames.POWER_W],
+                            mode="lines+markers",
+                        )
+                    )
+                    fig.update_layout(
+                        width=epd.width,
+                        height=epd.height - self.height_all_icons,
+                        margin={"l": 40, "r": 20, "t": 40, "b": 40},
+                    )
+                    img_bytes = fig.to_image(format="png")
+                    img = Image.open(io.BytesIO(img_bytes))
+                    img_l = img.convert("L")
+                    L_image.paste(img_l, (0, self.height_all_icons), mask=img_l)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()
