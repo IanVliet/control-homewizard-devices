@@ -138,8 +138,13 @@ class DeviceController:
 
             if self.on_raspberry_pi:
                 logger.info("Update E-paper display")
+                # TODO: Update display partially
                 # Update display
                 self.draw_display.draw_full_update()
+                # TODO: Update graph partially of actual available energy only in case
+                # enough time steps have passed since the last timesteps
+                # TODO: Update display fully in case it has been more than 5 times
+                # since the last full update
 
             async with asyncio.TaskGroup() as tg:
                 for socket in self.sorted_sockets:
@@ -258,7 +263,8 @@ async def main_loop(
         raise
     finally:
         logger.info("Cleaning up before shutdown...")
-        controller.draw_display.clear_sleep_display()
+        if controller.on_raspberry_pi:
+            controller.draw_display.clear_sleep_display()
 
 
 async def main(controller: DeviceController):

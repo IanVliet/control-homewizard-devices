@@ -20,7 +20,7 @@ if os.path.exists(waveshare_lib) and waveshare_lib not in sys.path:
 if is_raspberry_pi():
     from waveshare_epd import epd4in2_V2  # noqa: E402
 
-    ICON_SIZE = 32
+    ICON_SIZE = 64
     FONT_SIZE = 12
 
     class DrawDisplay:
@@ -37,9 +37,15 @@ if is_raspberry_pi():
                 self.epd.init()
                 self.epd.Clear()
                 self.font = ImageFont.load_default(size=FONT_SIZE)
-                self.positions, cols, rows, self.height_all_icons = (
-                    self.grid_positions()
-                )
+                (
+                    self.positions,
+                    cols,
+                    rows,
+                    self.cell_width,
+                    self.cell_height,
+                    self.max_text_width,
+                    self.height_all_icons,
+                ) = self.grid_positions()
             except IOError as e:
                 logger.error(f"Setup E-paper display failed with error: {e}")
             except asyncio.CancelledError:
@@ -60,30 +66,43 @@ if is_raspberry_pi():
 
         def grid_positions(self):
             bbox = self.font.getbbox("100%")
-            text_height = int(bbox[3] - bbox[1])
+            max_text_width = math.ceil(bbox[2] - bbox[0])
+            text_height = math.ceil(bbox[3] - bbox[1])
             # calculate grid for icon + text
-            max_cols = self.epd.width // ICON_SIZE
-            cols = min(max_cols, len(self.devices))
+            cell_width = max_text_width + ICON_SIZE
+            cell_height = max(ICON_SIZE, text_height)
+            n_cells = len(self.devices)
 
-            total_icons_width = cols * ICON_SIZE
+            max_cols = self.epd.width // cell_width
+            cols = min(max_cols, n_cells)
+
+            total_icons_width = cols * cell_width
             if cols > 1:
                 spacing = (self.epd.width - total_icons_width) // (cols - 1)
             else:
                 spacing = 0
 
-            rows = math.ceil(len(self.devices) / cols)
-            total_height = rows * (ICON_SIZE + text_height)
+            rows = math.ceil(n_cells / cols)
+            total_height = rows * cell_height
 
             positions: dict[SocketDevice | Battery, tuple[int, int]] = {}
 
             for idx, device in enumerate(self.devices):
                 row = idx // cols
                 col = idx % cols
-                x = col * (ICON_SIZE + spacing)
-                y = row * (ICON_SIZE + text_height)
+                x = col * (cell_width + spacing)
+                y = row * cell_height
                 positions[device] = (x, y)
 
-            return positions, cols, rows, total_height
+            return (
+                positions,
+                cols,
+                rows,
+                cell_width,
+                cell_height,
+                max_text_width,
+                total_height,
+            )
 
         def draw_full_update(self):
             try:
@@ -104,17 +123,17 @@ if is_raspberry_pi():
                         device.energy_stored / device.energy_capacity * 100
                     )
                     text = f"{percentage}%"
-                    bbox = draw.textbbox((0, 0), text, font=font)
-                    text_width = int(bbox[2] - bbox[0])
-                    text_height = int(bbox[3] - bbox[1])
-                    text_x = x + (ICON_SIZE - text_width) / 2
-                    text_y = y  # top of the cell
-
+                    text_bbox = draw.textbbox((0, 0), text, font=font)
+                    text_w = math.ceil(text_bbox[2] - text_bbox[0])
+                    text_h = math.ceil(text_bbox[3] - text_bbox[1])
+                    text_x = x + (self.max_text_width - text_w)
+                    text_y = y + math.ceil((self.cell_height - text_h) / 2)
                     draw.text((text_x, text_y), text, font=font, fill=0)
 
                     # add icon
-                    icon_y = y + text_height
-                    L_image.paste(icon, (x, icon_y), mask=icon)
+                    icon_x = x + (self.max_text_width - text_w)
+                    icon_y = y + math.ceil((self.cell_height - text_h) / 2)
+                    L_image.paste(icon, (icon_x, icon_y), mask=icon)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()

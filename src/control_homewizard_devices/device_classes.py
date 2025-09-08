@@ -2,11 +2,11 @@ from homewizard_energy import HomeWizardEnergy
 from control_homewizard_devices.hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
 import logging
 from dataclasses import dataclass
+from time import time
 
 from control_homewizard_devices.constants import (
     DELTA_T,
     IS_FULL_POWER_RATIO,
-    PERIODIC_SLEEP_DURATION,
 )
 
 
@@ -138,6 +138,7 @@ class SocketDevice(CompleteDevice):
         # whether the device should power on or off
         self.updated_state = False
         self.energy_stored = 0.0
+        self.time_last_update = time()
 
     @property
     def max_power_usage(self):
@@ -196,12 +197,15 @@ class SocketDevice(CompleteDevice):
                 # (or no longer) fully charged
                 self.energy_stored = 0.0
             else:
-                # Note: Updates with the constant sleep time for simplicity
-                # and due to the energy stored of the sockets
-                # (measurement.total_power_import_kwh) only having W precision.
-                self.energy_stored += (
-                    self.inst_power_usage * PERIODIC_SLEEP_DURATION / 3600
+                # Note: Updates energy stored with a measurement of the time passed
+                # since the last update
+                # (precision of energy stored of socket devices is limited)
+                time_passed = time() - self.time_last_update
+                logger.info(
+                    f"{self.device_name} time passed since "
+                    f"last state update: {time_passed:.3f} s"
                 )
+                self.energy_stored += self.inst_power_usage * time_passed / 3600
             logger.info(f"{self.device_name} energy stored: {self.energy_stored} Wh")
 
     def get_instantaneous_power(self):
@@ -223,6 +227,7 @@ class SocketDevice(CompleteDevice):
     async def update_power_state(self, logger: logging.Logger):
         if self.hwe_device is not None:
             await self.hwe_device.state_set(power_on=self.updated_state)
+            self.time_last_update = time()
             logger.info(f"{self.device_name} power state set to: {self.updated_state}")
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
@@ -234,7 +239,6 @@ class UserInfo:
     token: str
 
 
-# TODO: Remove priority and daily need from Battery class, as they are not used.
 class Battery(CompleteDevice):
     """
     Homewizard Battery
