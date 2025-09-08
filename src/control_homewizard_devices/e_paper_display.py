@@ -31,9 +31,9 @@ if is_raspberry_pi():
             self.resized_icons = self.get_resized_icons()
             self.logger = logger
             try:
-                logger.info("Setting up E-paper display (epd) class")
+                logger.info("Setting up E-paper display class")
                 self.epd = epd4in2_V2.EPD()
-                logger.info("Init and clear epd")
+                logger.info("Init and clear E-paper display")
                 self.epd.init()
                 self.epd.Clear()
                 self.font = ImageFont.load_default(size=FONT_SIZE)
@@ -41,9 +41,9 @@ if is_raspberry_pi():
                     self.grid_positions()
                 )
             except IOError as e:
-                logger.error(f"Setup epd failed with error: {e}")
+                logger.error(f"Setup E-paper display failed with error: {e}")
             except asyncio.CancelledError:
-                logger.info("Setup epd cancelled")
+                logger.info("Setup E-paper display cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise
 
@@ -85,11 +85,13 @@ if is_raspberry_pi():
 
             return positions, cols, rows, total_height
 
-        async def draw_full_update(self):
+        def draw_full_update(self):
             try:
                 logger = self.logger
                 logger.info("Attempting full update")
                 epd = self.epd
+                epd.init()
+                epd.Clear()
                 font = self.font
                 L_image = Image.new("L", (epd.width, epd.height), 255)
                 draw = ImageDraw.Draw(L_image)
@@ -114,15 +116,29 @@ if is_raspberry_pi():
                     icon_y = y + text_height
                     L_image.paste(icon, (x, icon_y), mask=icon)
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
-                await asyncio.sleep(5)
-                logger.info("Clear and go to sleep epd")
-                epd.init()
-                epd.Clear()
+                logger.info("Sleep E-paper display")
                 epd.sleep()
 
             except IOError as e:
                 logger.error(f"Full draw failed with error: {e}")
             except asyncio.CancelledError:
                 logger.info("Full draw cancelled")
+                epd4in2_V2.epdconfig.module_exit(cleanup=True)
+                raise
+
+        def clear_sleep_display(self):
+            try:
+                logger = self.logger
+                logger.info("Clearing E-paper display")
+                epd = self.epd
+                epd.init()
+                epd.Clear()
+                logger.info("Sleep E-paper display")
+                epd.sleep()
+
+            except IOError as e:
+                logger.error(f"Clear and sleep E-paper display failed with error: {e}")
+            except asyncio.CancelledError:
+                logger.info("Clear and sleep E-paper display cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise

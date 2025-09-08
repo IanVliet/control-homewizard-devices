@@ -258,6 +258,7 @@ async def main_loop(
         raise
     finally:
         logger.info("Cleaning up before shutdown...")
+        controller.draw_display.clear_sleep_display()
 
 
 async def main(controller: DeviceController):
