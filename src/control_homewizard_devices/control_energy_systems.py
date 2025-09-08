@@ -140,7 +140,7 @@ class DeviceController:
                 logger.info("Update E-paper display")
                 # TODO: Update display partially
                 # Update display
-                self.draw_display.draw_full_update(self.df_schedule)
+                self.draw_display.draw_full_update(self.df_power_interpolated)
                 # TODO: Update graph partially of actual available energy only in case
                 # enough time steps have passed since the last timesteps
                 # TODO: Update display fully in case it has been more than 5 times
@@ -196,6 +196,7 @@ class DeviceController:
                 data, results = self.optimization.solve_schedule_devices(
                     df_power_prediction, self.socket_and_battery_list
                 )
+                self.df_power_interpolated = data.df_power_interpolated
                 self.df_schedule = results[-1].df_variables
                 self.schedule_determine_socket_states(results)
                 logger.info(
