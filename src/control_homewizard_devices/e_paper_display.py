@@ -144,16 +144,19 @@ if is_raspberry_pi():
             rotated_y_label = y_label_image.rotate(90, expand=True)
             x_pos_y_label = 0
             y_pos_y_label = math.ceil((canvas_height - y_label_w) / 2)
-            plot_image.paste(
-                rotated_y_label, (x_pos_y_label, y_pos_y_label), mask=rotated_y_label
-            )
+            plot_image.paste(rotated_y_label, (x_pos_y_label, y_pos_y_label))
 
             # Draw x-axis line
             top_left_point = (y_label_h, 0)
-            bottom_left_point = (y_label_h, x_label_h)
-            bottom_right_point = (canvas_width, x_label_h)
+            bottom_left_point = (y_label_h, canvas_height - x_label_h)
+            bottom_right_point = (canvas_width, canvas_height - x_label_h)
             plot_draw.line(
-                (top_left_point, bottom_left_point, bottom_right_point), fill=epd.GRAY1
+                (top_left_point, bottom_left_point),
+                fill=epd.GRAY4,
+            )
+            plot_draw.line(
+                (bottom_left_point, bottom_right_point),
+                fill=epd.GRAY4,
             )
             return plot_image
 
@@ -195,9 +198,7 @@ if is_raspberry_pi():
                     logger.info("Drawing plot on E-paper display")
                     # TODO: Manually draw plot
                     plot_image = self.create_image_full_plot(df_schedule)
-                    L_image.paste(
-                        plot_image, (0, self.height_all_icons), mask=plot_image
-                    )
+                    L_image.paste(plot_image, (0, self.height_all_icons))
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()
