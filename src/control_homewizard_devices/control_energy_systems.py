@@ -25,6 +25,7 @@ from quartz_solar_forecast.forecast import run_forecast
 from datetime import datetime
 import pandas as pd
 import signal
+import numpy as np
 
 
 CONFIG_ENV_VAR = "MYPROJECT_CONFIG_PATH"
@@ -147,24 +148,26 @@ class DeviceController:
             df_timeline[TimelineColNames.PREDICTED_POWER] = (
                 df_timeline["power_kw"] * 1000
             )
-            df_timeline[TimelineColNames.MEASURED_POWER] = pd.NA
+            df_timeline[TimelineColNames.MEASURED_POWER] = np.nan
             # Initialize columns for sockets
             for device in self.sorted_sockets:
-                df_timeline[TimelineColNames.measured_power_consumption(device)] = pd.NA
+                df_timeline[TimelineColNames.measured_power_consumption(device)] = (
+                    np.nan
+                )
                 df_timeline[TimelineColNames.predicted_power_consumption(device)] = (
-                    pd.NA
+                    np.nan
                 )
             # Initialize columns for aggregate battery
             df_timeline[
                 TimelineColNames.measured_power_consumption(
                     self.optimization.data.aggregate_battery
                 )
-            ] = pd.NA
+            ] = np.nan
             df_timeline[
                 TimelineColNames.predicted_power_consumption(
                     self.optimization.data.aggregate_battery
                 )
-            ] = pd.NA
+            ] = np.nan
             return df_timeline
         except Exception as e:
             logger.error(
