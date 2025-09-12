@@ -144,3 +144,16 @@ def is_raspberry_pi():
     except FileNotFoundError:
         return False
     return False
+
+
+class TimelineColNames:
+    PREDICTED_POWER = "predicted power [w]"
+    MEASURED_POWER = "measured power [w]"
+
+    @staticmethod
+    def measured_power_consumption(device: CompleteDevice):
+        return f"measured power consumption {device.device_name} [w]"
+
+    @staticmethod
+    def predicted_power_consumption(device: CompleteDevice):
+        return f"predicted power consumption {device.device_name} [w]"

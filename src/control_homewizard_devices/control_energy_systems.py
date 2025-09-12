@@ -6,6 +6,7 @@ from control_homewizard_devices.utils import (
     initialize_solarpanel_sites,
     ZonedTime,
     is_raspberry_pi,
+    TimelineColNames,
 )
 from control_homewizard_devices.device_classes import (
     SocketDevice,
@@ -60,6 +61,9 @@ class DeviceController:
         )
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
         self.optimization = DeviceSchedulingOptimization(DELTA_T)
+        self.curr_timeindex: datetime | None = None
+        self.measurement_count: int = 0
+        self.df_timeline: pd.DataFrame | None = self.initialize_df_timeline()
         self.on_raspberry_pi = is_raspberry_pi()
         if self.on_raspberry_pi:
             from control_homewizard_devices.e_paper_display import DrawDisplay
@@ -102,6 +106,59 @@ class DeviceController:
             self.logger.error("Failed to retrieve any daily power forecast.")
         return df_solar_forecast
 
+    def initialize_df_timeline(self):
+        """
+        Creates a dataframe containing the following:
+        - the predicted solar power of the day
+        - columns for the measured available power (history)
+        - columns for each device of the set states (history)
+        - columns for each device of the states to be set (prediction)
+        A row entry should be added for the columns containing history.
+        This should be added to every timestep of the df (e.g. 15 mins).
+        The columns containing prediction will be updated periodicly.
+        This only needs to happen from the current timestep onwards.
+        """
+        if self.df_solar_forecast is None:
+            return None
+        if not isinstance(self.df_solar_forecast.index, pd.DatetimeIndex):
+            raise TypeError(
+                f"Expected DatetimeIndex, got {type(self.df_solar_forecast.index)}"
+            )
+        logger = self.logger
+        logger.info("Initializing df daily schedule")
+        now = datetime.now(self.START_FORECAST_TIME.tz)
+        next_forecast_time = self.START_FORECAST_TIME.at_next_date(now.date())
+        logger.debug(f"now tz: {now.tzinfo}")
+        logger.debug(f"next_forecast_time tz: {next_forecast_time.tzinfo}")
+        logger.debug(
+            f"df_solar_forecast index tz: {self.df_solar_forecast.index.tzinfo}"
+        )
+        try:
+            # Slice the solar forecast data to the next forecast time.
+            df_solar_slice = self.df_solar_forecast.loc[:next_forecast_time]
+            new_datetime_index = pd.date_range(
+                start=df_solar_slice.index.min(),
+                end=df_solar_slice.index.max(),
+                freq=f"{DELTA_T}h",
+            )
+            df_timeline = df_solar_slice.reindex(new_datetime_index).interpolate(
+                method="time"
+            )
+            df_timeline[TimelineColNames.PREDICTED_POWER] = (
+                df_timeline["power_kw"] * 1000
+            )
+            for device in self.socket_and_battery_list:
+                df_timeline[TimelineColNames.measured_power_consumption(device)] = pd.NA
+                df_timeline[TimelineColNames.predicted_power_consumption(device)] = (
+                    pd.NA
+                )
+            return df_timeline
+        except Exception as e:
+            logger.error(
+                f"Error during initialization of df_timeline with solar forecast: {e}"
+            )
+            return None
+
     async def daily_power_forecast(self):
         """
         Retrieves the power forecast for all solar panels on a daily basis.
@@ -114,6 +171,8 @@ class DeviceController:
             await asyncio.sleep(delay)
 
             self.df_solar_forecast = self.get_forecast_data()
+            # Also reintiliaze df_timeline
+            self.df_timeline = self.initialize_df_timeline()
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
             self.logger.info(
@@ -135,12 +194,12 @@ class DeviceController:
             logger.info(f"Total available power: {-total_power} W")
 
             self.primary_scheduling_with_fallback(total_power)
-
+            self.update_df_timeline(-total_power)
             if self.on_raspberry_pi:
                 logger.info("Update E-paper display")
                 # TODO: Update display partially
                 # Update display
-                self.draw_display.draw_full_update(self.df_power_interpolated)
+                self.draw_display.draw_full_update(self.df_timeline)
                 # TODO: Update graph partially of actual available energy only in case
                 # enough time steps have passed since the last timesteps
                 # TODO: Update display fully in case it has been more than 5 times
@@ -237,6 +296,96 @@ class DeviceController:
                 socket.updated_state = True
             else:
                 socket.updated_state = False
+
+    def update_df_timeline(self, available_power: float):
+        logger = self.logger
+        logger.info("Updating data stored in df_timeline")
+        now = datetime.now(self.START_FORECAST_TIME.tz)
+        if self.df_timeline is None:
+            logger.warning(
+                "Updating failed, since df_timeline has not been initialized properly. "
+            )
+            return
+
+        pos_curr_timestep = self.df_timeline.index.searchsorted(now, side="right")
+        if isinstance(pos_curr_timestep, list):
+            logger.warning(
+                "The position of the index of the current timestep is not as excepted."
+                "Instead of an int it was a list of int."
+                "Using the first value for the position"
+            )
+            pos_curr_timestep = pos_curr_timestep[0]
+        if pos_curr_timestep > len(self.df_timeline.index):
+            logger.warning(
+                "A timestamp in df_timeline for the current time could not be found."
+                "A new dataframe should be initialized soon."
+            )
+            return
+        timeindex = self.df_timeline.index[pos_curr_timestep]
+        if self.curr_timeindex is None or self.curr_timeindex != timeindex:
+            logger.debug(f"Initializizing moving averages for {timeindex}")
+            self.curr_timeindex = timeindex
+            self.measurement_count = 1
+            # New timeindex: start the moving average with the first value
+            self.df_timeline[timeindex, TimelineColNames.MEASURED_POWER] = (
+                available_power
+            )
+            for device in self.socket_and_battery_list:
+                self.df_timeline[
+                    timeindex, TimelineColNames.measured_power_consumption(device)
+                ] = device.inst_power_usage
+        else:
+            # Must still be the same timeindex --> Updating moving average
+            self.logger.debug(
+                f"Updating moving averages of {timeindex} with the measured powers"
+            )
+            self.measurement_count += 1
+            self.update_moving_average(
+                timeindex, TimelineColNames.MEASURED_POWER, available_power
+            )
+            for device in self.socket_and_battery_list:
+                if device.inst_power_usage is None:
+                    self.logger.warning(
+                        f"Updating of moving average failed for {device.device_name}, "
+                        "since inst_power_usage is None. Skipping..."
+                    )
+                    continue
+                self.update_moving_average(
+                    timeindex,
+                    TimelineColNames.measured_power_consumption(device),
+                    device.inst_power_usage,
+                )
+        next_pos_timestep = pos_curr_timestep + 1
+        if next_pos_timestep > len(self.df_timeline.index):
+            logger.info(
+                "There is no next timeindex in df_timeline. "
+                "Therefore, the next df_timeline should be initialized soon."
+            )
+            return
+        next_timeindex = self.df_timeline.index[next_pos_timestep]
+        for device in self.socket_and_battery_list:
+            logger.debug(
+                f"Updating predicted power consumption for {device.device_name} "
+                "in df_timeline from states in df_schedule"
+            )
+            self.df_timeline.loc[
+                next_timeindex:, TimelineColNames.predicted_power_consumption(device)
+            ] = (
+                device.max_power_usage
+                * self.df_schedule.loc[next_timeindex:, ColNames.state(device)]
+            )
+
+    def update_moving_average(
+        self, timeindex: datetime, col_name: str, new_value: float
+    ):
+        self.logger.debug(f"Updating moving average for {col_name}")
+        if self.df_timeline is None:
+            self.logger.warning("df_timeline has not yet been initialized")
+            return
+        old_avg = self.df_timeline.at[timeindex, col_name]
+        self.df_timeline.at[timeindex, col_name] = (
+            old_avg + (new_value - old_avg) / self.measurement_count
+        )
 
     def simple_determine_socket_states(self, total_power):
         # available power is defined as - total power
