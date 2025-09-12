@@ -63,7 +63,7 @@ class DeviceController:
         self.optimization = DeviceSchedulingOptimization(DELTA_T)
         self.curr_timeindex: datetime | None = None
         self.measurement_count: int = 0
-        self.df_timeline: pd.DataFrame | None = self.initialize_df_timeline()
+        self.df_timeline: pd.DataFrame | None = None
         self.on_raspberry_pi = is_raspberry_pi()
         if self.on_raspberry_pi:
             from control_homewizard_devices.e_paper_display import DrawDisplay
@@ -183,8 +183,6 @@ class DeviceController:
             await asyncio.sleep(delay)
 
             self.df_solar_forecast = self.get_forecast_data()
-            # Also reintiliaze df_timeline
-            self.df_timeline = self.initialize_df_timeline()
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
             self.logger.info(
@@ -312,6 +310,9 @@ class DeviceController:
     def update_df_timeline(self, available_power: float):
         logger = self.logger
         logger.info("Updating data stored in df_timeline")
+        if self.df_timeline is None:
+            logger.info("Attempting to initialize df_timeline")
+            self.df_timeline = self.initialize_df_timeline()
         if self.df_timeline is None:
             logger.warning(
                 "Updating failed, since df_timeline has not been initialized properly. "
