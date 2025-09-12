@@ -147,6 +147,7 @@ class DeviceController:
             df_timeline[TimelineColNames.PREDICTED_POWER] = (
                 df_timeline["power_kw"] * 1000
             )
+            df_timeline[TimelineColNames.MEASURED_POWER] = pd.NA
             # Initialize columns for sockets
             for device in self.sorted_sockets:
                 df_timeline[TimelineColNames.measured_power_consumption(device)] = pd.NA
