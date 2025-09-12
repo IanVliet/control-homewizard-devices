@@ -6,8 +6,9 @@ import logging
 import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from control_homewizard_devices.schedule_devices import ColNames
-from control_homewizard_devices.utils import is_raspberry_pi
+from control_homewizard_devices.utils import is_raspberry_pi, TimelineColNames
 import pandas as pd
+import numpy as np
 
 CURRENT_DIR = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -56,6 +57,7 @@ if is_raspberry_pi():
                 raise
 
         def get_resized_icons(self):
+            self.logger.info("Loading icon files")
             resized_icons: dict[SocketDevice | Battery, Image.Image] = {}
             for device in self.devices:
                 icon_path = os.path.join(
@@ -75,6 +77,10 @@ if is_raspberry_pi():
             return text_w, text_h
 
         def grid_positions(self):
+            self.logger.info(
+                "Calculating positions for cells containing charge percentages "
+                "and icons"
+            )
             max_text_width, text_height = self._get_text_width_and_height(
                 "100%", self.font
             )
@@ -114,7 +120,7 @@ if is_raspberry_pi():
                 total_height,
             )
 
-        def create_image_full_plot(self, df_schedule: pd.DataFrame) -> Image.Image:
+        def create_image_full_plot(self, df_timeline: pd.DataFrame) -> Image.Image:
             epd = self.epd
             canvas_width, canvas_height = (
                 epd.width,
@@ -154,13 +160,46 @@ if is_raspberry_pi():
                 (top_left_point, bottom_left_point),
                 fill=epd.GRAY4,
             )
+            # TODO: Draw the 0 line either on the bottom or
+            # if the minimum of the measured power and predicted power is less than 0
+            # draw the line at the pixel height that is closest to 0.
             plot_draw.line(
                 (bottom_left_point, bottom_right_point),
                 fill=epd.GRAY4,
             )
+            # Draw predicted power line
+            plot_width, plot_height = (
+                canvas_width - y_label_h,
+                canvas_height - x_label_h,
+            )
+            num_datapoints = len(df_timeline.index)
+            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
+            measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
+            # Get the maximum of the predicted and measured power
+            # TODO: In case the scheduled devices are included into the graph -->
+            # take the devices into accounting when calculating the min and max
+            max_power = np.nanmax([predicted_power, measured_power])
+            min_power = np.nanmin([predicted_power, measured_power])
+            # Normalized to 0-1
+            normalized_predicted_power = (predicted_power - min_power) / (
+                max_power - min_power
+            )
+            x_pixels = np.linspace(0, plot_width - 1, num_datapoints)
+            y_pixels = (1 - normalized_predicted_power) * (plot_height - 1)
+            data_image = Image.new("L", (plot_width, plot_height), color=epd.GRAY1)
+            data_draw = ImageDraw.Draw(data_image)
+
+            # TODO: Draw the measured power up to the current time
+            # TODO: Draw a vertical line for the current time
+            points = list(zip(x_pixels, y_pixels, strict=False))
+            data_draw.line(points, fill=epd.GRAY4)
+
+            plot_image.paste(data_image, top_left_point)
+
+            # Draw measured power line (only be available up to the current timestep)
             return plot_image
 
-        def draw_full_update(self, df_schedule: pd.DataFrame):
+        def draw_full_update(self, df_timeline: pd.DataFrame | None):
             try:
                 logger = self.logger
                 logger.info("Attempting full update")
@@ -190,14 +229,14 @@ if is_raspberry_pi():
                     L_image.paste(icon, (icon_x, icon_y), mask=icon)
 
                 # TODO: Draw the pandas dataframe via a plot
-                if df_schedule is None:
+                if df_timeline is None:
                     logger.warning(
-                        "Drawing plot skipped, since the df_schedule is None"
+                        "Drawing plot skipped, since the df_timeline is None"
                     )
                 else:
                     logger.info("Drawing plot on E-paper display")
                     # TODO: Manually draw plot
-                    plot_image = self.create_image_full_plot(df_schedule)
+                    plot_image = self.create_image_full_plot(df_timeline)
                     L_image.paste(plot_image, (0, self.height_all_icons))
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
