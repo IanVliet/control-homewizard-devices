@@ -31,8 +31,8 @@ if is_raspberry_pi():
             self, devices: list[SocketDevice | Battery], logger: logging.Logger
         ) -> None:
             self.devices = devices
-            self.resized_icons = self.get_resized_icons()
             self.logger = logger
+            self.resized_icons = self.get_resized_icons()
             try:
                 logger.info("Setting up E-paper display class")
                 self.epd = epd4in2_V2.EPD()
