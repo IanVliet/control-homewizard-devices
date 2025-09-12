@@ -3,6 +3,7 @@ from control_homewizard_devices.hwe_v2_wrapper.init_wrapper import HomeWizardEne
 import logging
 from dataclasses import dataclass
 from time import time
+from .constants import AGGREGATE_BATTERY
 
 from control_homewizard_devices.constants import (
     DELTA_T,
@@ -342,4 +343,24 @@ class SocketDeviceSchedulePolicy(DeviceSchedulePolicy):
         )
         self.energy_considered_full: float = (
             device.energy_capacity - energy_stored_buffer_lower
+        )
+
+
+class AggregateBattery:
+    """
+    Class to aggregate multiple batteries into one.
+    This is used to simplify the scheduling process.
+    """
+
+    def __init__(self, battery_list: list[Battery]) -> None:
+        self.device_name = AGGREGATE_BATTERY
+        self.battery_list = battery_list
+        self.max_power_usage = float(
+            sum(battery.max_power_usage for battery in battery_list)
+        )
+        self.energy_stored = float(
+            sum(battery.energy_stored for battery in battery_list)
+        )
+        self.max_energy_stored = sum(
+            battery.policy.energy_stored_upper for battery in battery_list
         )

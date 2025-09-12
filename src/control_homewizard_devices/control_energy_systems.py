@@ -147,11 +147,23 @@ class DeviceController:
             df_timeline[TimelineColNames.PREDICTED_POWER] = (
                 df_timeline["power_kw"] * 1000
             )
-            for device in self.socket_and_battery_list:
+            # Initialize columns for sockets
+            for device in self.sorted_sockets:
                 df_timeline[TimelineColNames.measured_power_consumption(device)] = pd.NA
                 df_timeline[TimelineColNames.predicted_power_consumption(device)] = (
                     pd.NA
                 )
+            # Initialize columns for aggregate battery
+            df_timeline[
+                TimelineColNames.measured_power_consumption(
+                    self.optimization.data.aggregate_battery
+                )
+            ] = pd.NA
+            df_timeline[
+                TimelineColNames.predicted_power_consumption(
+                    self.optimization.data.aggregate_battery
+                )
+            ] = pd.NA
             return df_timeline
         except Exception as e:
             logger.error(
@@ -300,70 +312,29 @@ class DeviceController:
     def update_df_timeline(self, available_power: float):
         logger = self.logger
         logger.info("Updating data stored in df_timeline")
-        now = datetime.now(self.START_FORECAST_TIME.tz)
         if self.df_timeline is None:
             logger.warning(
                 "Updating failed, since df_timeline has not been initialized properly. "
             )
             return
 
-        pos_curr_timestep = self.df_timeline.index.searchsorted(now, side="right")
-        if isinstance(pos_curr_timestep, list):
-            logger.warning(
-                "The position of the index of the current timestep is not as excepted."
-                "Instead of an int it was a list of int."
-                "Using the first value for the position"
-            )
-            pos_curr_timestep = pos_curr_timestep[0]
-        if pos_curr_timestep > len(self.df_timeline.index):
-            logger.warning(
-                "A timestamp in df_timeline for the current time could not be found."
-                "A new dataframe should be initialized soon."
-            )
+        timeindex, pos_curr_timestep = self.get_curr_timeindex()
+        if timeindex is None:
+            # logging message is present in get_curr_timeindex
             return
-        timeindex = self.df_timeline.index[pos_curr_timestep]
-        if self.curr_timeindex is None or self.curr_timeindex != timeindex:
-            logger.debug(f"Initializizing moving averages for {timeindex}")
-            self.curr_timeindex = timeindex
-            self.measurement_count = 1
-            # New timeindex: start the moving average with the first value
-            self.df_timeline[timeindex, TimelineColNames.MEASURED_POWER] = (
-                available_power
-            )
-            for device in self.socket_and_battery_list:
-                self.df_timeline[
-                    timeindex, TimelineColNames.measured_power_consumption(device)
-                ] = device.inst_power_usage
-        else:
-            # Must still be the same timeindex --> Updating moving average
-            self.logger.debug(
-                f"Updating moving averages of {timeindex} with the measured powers"
-            )
-            self.measurement_count += 1
-            self.update_moving_average(
-                timeindex, TimelineColNames.MEASURED_POWER, available_power
-            )
-            for device in self.socket_and_battery_list:
-                if device.inst_power_usage is None:
-                    self.logger.warning(
-                        f"Updating of moving average failed for {device.device_name}, "
-                        "since inst_power_usage is None. Skipping..."
-                    )
-                    continue
-                self.update_moving_average(
-                    timeindex,
-                    TimelineColNames.measured_power_consumption(device),
-                    device.inst_power_usage,
-                )
-        next_pos_timestep = pos_curr_timestep + 1
-        if next_pos_timestep > len(self.df_timeline.index):
-            logger.info(
-                "There is no next timeindex in df_timeline. "
-                "Therefore, the next df_timeline should be initialized soon."
-            )
+        total_inst_power_usage_aggregate_battery = (
+            self.get_total_inst_power_usage_aggregate_battery()
+        )
+        self.update_moving_average_columns(
+            timeindex, available_power, total_inst_power_usage_aggregate_battery
+        )
+
+        next_timeindex = self.get_next_timeindex(pos_curr_timestep)
+        if next_timeindex is None:
+            # Logging message is present in get_next_timeindex
             return
-        next_timeindex = self.df_timeline.index[next_pos_timestep]
-        for device in self.socket_and_battery_list:
+        # Update the predicted values
+        for device in self.optimization.data.devices_list:
             logger.debug(
                 f"Updating predicted power consumption for {device.device_name} "
                 "in df_timeline from states in df_schedule"
@@ -374,6 +345,136 @@ class DeviceController:
                 device.max_power_usage
                 * self.df_schedule.loc[next_timeindex:, ColNames.state(device)]
             )
+
+    def get_curr_timeindex(self) -> tuple[datetime | None, int]:
+        if self.df_timeline is None:
+            error_msg = "Cannot find timeindex while df_timeline is None"
+            self.logger.error(error_msg)
+            raise IndexError(error_msg)
+        now = datetime.now(self.START_FORECAST_TIME.tz)
+        pos_curr_timestep = self.df_timeline.index.searchsorted(now, side="right")
+        if isinstance(pos_curr_timestep, list):
+            self.logger.warning(
+                "The position of the index of the current timestep is not as excepted."
+                "Instead of an int it was a list of int."
+                "Using the first value for the position"
+            )
+            pos_curr_timestep = pos_curr_timestep[0]
+        if pos_curr_timestep > len(self.df_timeline.index):
+            self.logger.warning(
+                "A timestamp in df_timeline for the current time could not be found."
+                "A new dataframe should be initialized soon."
+            )
+            return None, pos_curr_timestep
+        timeindex = self.df_timeline.index[pos_curr_timestep]
+        return timeindex, pos_curr_timestep
+
+    def get_next_timeindex(self, pos_curr_timestep: int):
+        if self.df_timeline is None:
+            error_msg = "Cannot find next timeindex while df_timeline is None"
+            self.logger.error(error_msg)
+            raise IndexError(error_msg)
+        next_pos_timestep = pos_curr_timestep + 1
+        if next_pos_timestep > len(self.df_timeline.index):
+            self.logger.info(
+                "There is no next timeindex in df_timeline. "
+                "Therefore, the next df_timeline should be initialized soon."
+            )
+            return None
+        next_timeindex = self.df_timeline.index[next_pos_timestep]
+        return next_timeindex
+
+    def get_total_inst_power_usage_aggregate_battery(self):
+        length_battery_list = len(self.optimization.data.battery_list)
+        if length_battery_list == 0:
+            return 0.0
+        total_inst_power_usage_aggregate_battery = 0.0
+        for battery in self.optimization.data.battery_list:
+            if battery.inst_power_usage is None:
+                self.logger.warning(
+                    f"{battery.device_name}'s inst_power_usage is None. "
+                    "Skipping for the calculation of the total inst_power_usage "
+                    "of the aggregate battery"
+                )
+                continue
+            total_inst_power_usage_aggregate_battery += battery.inst_power_usage
+        return total_inst_power_usage_aggregate_battery / length_battery_list
+
+    def update_moving_average_columns(
+        self,
+        timeindex: datetime,
+        available_power: float,
+        total_inst_power_usage_aggregate_battery: float,
+    ):
+        logger = self.logger
+        if self.df_timeline is None:
+            error_msg = (
+                "update_moving_average_columns should only be called "
+                "after it has been made that df_timeline is not None"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if self.curr_timeindex is None or self.curr_timeindex != timeindex:
+            logger.debug(f"Initializizing moving averages for {timeindex}")
+            self.curr_timeindex = timeindex
+            self.measurement_count = 1
+            # New timeindex: start the moving average with the first value
+            self.df_timeline[timeindex, TimelineColNames.MEASURED_POWER] = (
+                available_power
+            )
+            for device in self.sorted_sockets:
+                if device.inst_power_usage is None:
+                    logger.warning(
+                        "Initialization of moving average failed for socket "
+                        f"{device.device_name}, "
+                        "since inst_power_usage is None. Skipping..."
+                    )
+                    continue
+                self.df_timeline[
+                    timeindex, TimelineColNames.measured_power_consumption(device)
+                ] = device.inst_power_usage
+
+            self.df_timeline[
+                timeindex,
+                TimelineColNames.measured_power_consumption(
+                    self.optimization.data.aggregate_battery
+                ),
+            ] = total_inst_power_usage_aggregate_battery
+        else:
+            # Must still be the same timeindex --> Updating moving average
+            logger.debug(
+                f"Updating moving averages of {timeindex} with the measured powers"
+            )
+            self.measurement_count += 1
+            self.update_moving_average(
+                timeindex, TimelineColNames.MEASURED_POWER, available_power
+            )
+            for device in self.optimization.data.devices_list:
+                if isinstance(device, SocketDevice):
+                    if device.inst_power_usage is None:
+                        self.logger.warning(
+                            "Updating of moving average failed for socket "
+                            f"{device.device_name}, "
+                            "since inst_power_usage is None. Skipping..."
+                        )
+                        continue
+                    self.update_moving_average(
+                        timeindex,
+                        TimelineColNames.measured_power_consumption(device),
+                        device.inst_power_usage,
+                    )
+                else:
+                    if total_inst_power_usage_aggregate_battery == 0.0:
+                        logger.warning(
+                            "Updating of moving average failed for aggregate battery, "
+                            "since total_inst_power_usage_aggregate_battery is 0"
+                        )
+                        continue
+                    self.update_moving_average(
+                        timeindex,
+                        TimelineColNames.measured_power_consumption(device),
+                        total_inst_power_usage_aggregate_battery,
+                    )
 
     def update_moving_average(
         self, timeindex: datetime, col_name: str, new_value: float

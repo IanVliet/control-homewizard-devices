@@ -3,43 +3,10 @@ import pandas as pd
 from control_homewizard_devices.device_classes import (
     SocketDevice,
     Battery,
-    CompleteDevice,
+    AggregateBattery,
 )
-from .constants import AGGREGATE_BATTERY
+from control_homewizard_devices.utils import ColNames
 from typing import Any
-
-
-class AggregateBattery:
-    """
-    Class to aggregate multiple batteries into one.
-    This is used to simplify the scheduling process.
-    """
-
-    def __init__(self, battery_list: list[Battery]) -> None:
-        self.device_name = AGGREGATE_BATTERY
-        self.battery_list = battery_list
-        self.max_power_usage = float(
-            sum(battery.max_power_usage for battery in battery_list)
-        )
-        self.energy_stored = float(
-            sum(battery.energy_stored for battery in battery_list)
-        )
-        self.max_energy_stored = sum(
-            battery.policy.energy_stored_upper for battery in battery_list
-        )
-
-
-class ColNames:
-    POWER_W = "power [w]"
-    AVAILABLE_POWER = "available power"
-
-    @staticmethod
-    def state(device: CompleteDevice | AggregateBattery):
-        return f"schedule {device.device_name}"
-
-    @staticmethod
-    def energy_stored(device: CompleteDevice | AggregateBattery):
-        return f"energy stored {device.device_name}"
 
 
 class ScheduleData:

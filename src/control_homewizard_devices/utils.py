@@ -5,6 +5,7 @@ from control_homewizard_devices.device_classes import (
     SocketDevice,
     P1Device,
     Battery,
+    AggregateBattery,
 )
 import json
 from quartz_solar_forecast.pydantic_models import PVSite
@@ -146,14 +147,27 @@ def is_raspberry_pi():
     return False
 
 
+class ColNames:
+    POWER_W = "power [w]"
+    AVAILABLE_POWER = "available power"
+
+    @staticmethod
+    def state(device: CompleteDevice | AggregateBattery):
+        return f"schedule {device.device_name}"
+
+    @staticmethod
+    def energy_stored(device: CompleteDevice | AggregateBattery):
+        return f"energy stored {device.device_name}"
+
+
 class TimelineColNames:
     PREDICTED_POWER = "predicted power [w]"
     MEASURED_POWER = "measured power [w]"
 
     @staticmethod
-    def measured_power_consumption(device: CompleteDevice):
+    def measured_power_consumption(device: CompleteDevice | AggregateBattery):
         return f"measured power consumption {device.device_name} [w]"
 
     @staticmethod
-    def predicted_power_consumption(device: CompleteDevice):
+    def predicted_power_consumption(device: CompleteDevice | AggregateBattery):
         return f"predicted power consumption {device.device_name} [w]"
