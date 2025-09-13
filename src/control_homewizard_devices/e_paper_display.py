@@ -184,21 +184,36 @@ if is_raspberry_pi():
             # TODO: Draw the measured power up to the current time
             if curr_time_pos is not None:
                 measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
-                isnan_mask = np.isnan(measured_power)
-                nan_pos = (
-                    isnan_mask.argmax() if isnan_mask.any() else len(measured_power)
-                )
-                # Ensure we don't go beyond NaN
-                pos = min(curr_time_pos, nan_pos - 1)
-                self.logger.debug("Drawing measured power up to index: %s", pos)
-                measured_power_points = self.power_array_to_points(
-                    measured_power[: pos + 1],
-                    min_power,
-                    max_power,
-                    plot_height,
-                    x_pixels[: pos + 1],
-                )
-                data_draw.line(measured_power_points, fill=epd.GRAY4)
+                notnan_mask = ~np.isnan(measured_power)
+                notnan_pos = np.where(notnan_mask)[0][0] if notnan_mask.any() else None
+                # Should go from the first not-nan value to the current time position
+                if notnan_pos is None:
+                    self.logger.debug(
+                        "All measured power values are NaN, "
+                        "skipping drawing measured power"
+                    )
+                else:
+                    self.logger.debug(
+                        "Drawing measured power from index: %s up to index: %s",
+                        notnan_pos,
+                        curr_time_pos,
+                    )
+                    if np.isnan(measured_power[notnan_pos : curr_time_pos + 1]).any():
+                        error_msg = (
+                            "Measured power contains NaN values between "
+                            "the first not-NaN value and the current time position. "
+                            "Skipping..."
+                        )
+                        self.logger.error(error_msg)
+                        raise ValueError(error_msg)
+                    measured_power_points = self.power_array_to_points(
+                        measured_power[notnan_pos : curr_time_pos + 1],
+                        min_power,
+                        max_power,
+                        plot_height,
+                        x_pixels[notnan_pos : curr_time_pos + 1],
+                    )
+                    data_draw.line(measured_power_points, fill=epd.GRAY4)
 
             # Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:

@@ -187,6 +187,7 @@ class DeviceController:
             await asyncio.sleep(delay)
 
             self.df_solar_forecast = self.get_forecast_data()
+            self.df_timeline = None
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
             self.logger.info(
