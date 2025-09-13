@@ -161,6 +161,7 @@ if is_raspberry_pi():
                 canvas_height - x_label_h,
             )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
+            self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
             # Convert the time series to pixel positions
             num_datapoints = len(df_timeline.index)
             x_pixels = np.linspace(0, plot_width - 1, num_datapoints)
@@ -168,6 +169,7 @@ if is_raspberry_pi():
             data_image = Image.new("L", (plot_width, plot_height), color=epd.GRAY1)
             data_draw = ImageDraw.Draw(data_image)
 
+            self.logger.debug("Current timeindex: %s", curr_timeindex)
             # Get the position of the current time index
             if curr_timeindex is not None:
                 if curr_timeindex in df_timeline.index:
@@ -188,6 +190,7 @@ if is_raspberry_pi():
                 )
                 # Ensure we don't go beyond NaN
                 pos = min(curr_time_pos, nan_pos - 1)
+                self.logger.debug("Drawing measured power up to index: %s", pos)
                 measured_power_points = self.power_array_to_points(
                     measured_power[: pos + 1],
                     min_power,
@@ -199,6 +202,9 @@ if is_raspberry_pi():
 
             # TODO: Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
+                self.logger.debug(
+                    "Drawing current time line at index: %s", curr_time_pos
+                )
                 curr_time_x = x_pixels[curr_time_pos]
                 data_draw.line(
                     [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
@@ -206,6 +212,7 @@ if is_raspberry_pi():
                 )
             # TODO: Draw rectangles or something for the scheduled devices.
             # Draw line for predicted power
+            self.logger.debug("Drawing predicted power line")
             predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
             predicted_power_points = self.power_array_to_points(
                 predicted_power, min_power, max_power, plot_height, x_pixels
