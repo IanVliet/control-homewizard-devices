@@ -229,7 +229,7 @@ if is_raspberry_pi():
             bottom_left_point = (y_label_h, x_axis_height)
             bottom_right_point = (canvas_width, x_axis_height)
             plot_draw.line(
-                (top_left_point, bottom_left_point),
+                (top_left_point, (y_label_h, plot_height - 1)),
                 fill=epd.GRAY4,
             )
             # Draw the x-axis line where the power is 0 (y=0)
