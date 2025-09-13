@@ -426,7 +426,7 @@ class DeviceController:
             self.curr_timeindex = timeindex
             self.measurement_count = 1
             # New timeindex: start the moving average with the first value
-            self.df_timeline[timeindex, TimelineColNames.MEASURED_POWER] = (
+            self.df_timeline.at[timeindex, TimelineColNames.MEASURED_POWER] = (
                 available_power
             )
             for device in self.sorted_sockets:
@@ -437,11 +437,11 @@ class DeviceController:
                         "since inst_power_usage is None. Skipping..."
                     )
                     continue
-                self.df_timeline[
+                self.df_timeline.at[
                     timeindex, TimelineColNames.measured_power_consumption(device)
                 ] = device.inst_power_usage
 
-            self.df_timeline[
+            self.df_timeline.at[
                 timeindex,
                 TimelineColNames.measured_power_consumption(
                     self.optimization.data.aggregate_battery
