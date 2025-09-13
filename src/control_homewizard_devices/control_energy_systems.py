@@ -213,7 +213,9 @@ class DeviceController:
                 logger.info("Update E-paper display")
                 # TODO: Update display partially
                 # Update display
-                self.draw_display.draw_full_update(self.df_timeline)
+                self.draw_display.draw_full_update(
+                    self.df_timeline, self.curr_timeindex
+                )
                 # TODO: Update graph partially of actual available energy only in case
                 # enough time steps have passed since the last timesteps
                 # TODO: Update display fully in case it has been more than 5 times
@@ -317,11 +319,11 @@ class DeviceController:
         if self.df_timeline is None:
             logger.info("Attempting to initialize df_timeline")
             self.df_timeline = self.initialize_df_timeline()
-        if self.df_timeline is None:
-            logger.warning(
-                "Updating failed, since df_timeline has not been initialized properly. "
-            )
-            return
+            if self.df_timeline is None:
+                logger.warning(
+                    "Updating failed, since df_timeline has not initialized properly. "
+                )
+                return
 
         timeindex, pos_curr_timestep = self.get_curr_timeindex()
         if timeindex is None:

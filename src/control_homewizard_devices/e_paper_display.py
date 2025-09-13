@@ -9,6 +9,7 @@ from control_homewizard_devices.schedule_devices import ColNames
 from control_homewizard_devices.utils import is_raspberry_pi, TimelineColNames
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
 CURRENT_DIR = os.path.dirname(__file__)
 REPO_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
@@ -120,7 +121,9 @@ if is_raspberry_pi():
                 total_height,
             )
 
-        def create_image_full_plot(self, df_timeline: pd.DataFrame) -> Image.Image:
+        def create_image_full_plot(
+            self, df_timeline: pd.DataFrame, curr_timeindex: datetime | None
+        ) -> Image.Image:
             epd = self.epd
             canvas_width, canvas_height = (
                 epd.width,
@@ -157,34 +160,57 @@ if is_raspberry_pi():
                 canvas_width - y_label_h,
                 canvas_height - x_label_h,
             )
+            min_power, max_power = self.calculate_min_max_power(df_timeline)
+            # Convert the time series to pixel positions
             num_datapoints = len(df_timeline.index)
-            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
-            measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
-            # Get the maximum of the predicted and measured power
-            # TODO: In case the scheduled devices are included into the graph -->
-            # take the devices into accounting when calculating the min and max
-            max_stacked_power = np.array(
-                [np.nanmax(predicted_power), np.nanmax(measured_power), 0]
-            )  # Ensure max power is atleast 0
-            max_power = np.nanmax(max_stacked_power)
-            min_stacked_power = np.array(
-                [np.nanmin(predicted_power), np.nanmin(measured_power), 0]
-            )  # Ensure min power is atleast 0
-            min_power = np.nanmin(min_stacked_power)
-            # Normalized to 0-1
-            normalized_predicted_power = (predicted_power - min_power) / (
-                max_power - min_power
-            )
             x_pixels = np.linspace(0, plot_width - 1, num_datapoints)
-            y_pixels = (1 - normalized_predicted_power) * (plot_height - 1)
+            # Initialize the data image with white background
             data_image = Image.new("L", (plot_width, plot_height), color=epd.GRAY1)
             data_draw = ImageDraw.Draw(data_image)
 
+            # Get the position of the current time index
+            if curr_timeindex is not None:
+                if curr_timeindex in df_timeline.index:
+                    curr_time_pos = int(
+                        df_timeline.index.get_indexer([curr_timeindex])[0]
+                    )
+                else:
+                    curr_time_pos = None
+            else:
+                curr_time_pos = None
+
             # TODO: Draw the measured power up to the current time
+            if curr_time_pos is not None:
+                measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
+                isnan_mask = np.isnan(measured_power)
+                nan_pos = (
+                    isnan_mask.argmax() if isnan_mask.any() else len(measured_power)
+                )
+                # Ensure we don't go beyond NaN
+                pos = min(curr_time_pos, nan_pos - 1)
+                measured_power_points = self.power_array_to_points(
+                    measured_power[: pos + 1],
+                    min_power,
+                    max_power,
+                    plot_height,
+                    x_pixels[: pos + 1],
+                )
+                data_draw.line(measured_power_points, fill=epd.GRAY4)
+
             # TODO: Draw a vertical line for the current time
+            if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
+                curr_time_x = x_pixels[curr_time_pos]
+                data_draw.line(
+                    [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
+                    fill=epd.GRAY2,
+                )
             # TODO: Draw rectangles or something for the scheduled devices.
-            points = list(zip(x_pixels, y_pixels, strict=False))
-            data_draw.line(points, fill=epd.GRAY4)
+            # Draw line for predicted power
+            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
+            predicted_power_points = self.power_array_to_points(
+                predicted_power, min_power, max_power, plot_height, x_pixels
+            )
+            data_draw.line(predicted_power_points, fill=epd.GRAY3)
 
             plot_image.paste(data_image, top_left_point)
 
@@ -209,7 +235,39 @@ if is_raspberry_pi():
             plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
             return plot_image
 
-        def draw_full_update(self, df_timeline: pd.DataFrame | None):
+        def calculate_min_max_power(self, df_timeline: pd.DataFrame):
+            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
+            measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
+            # Get the maximum of the predicted and measured power
+            # TODO: In case the scheduled devices are included into the graph -->
+            # take the devices into accounting when calculating the min and max
+            max_stacked_power = np.array(
+                [np.nanmax(predicted_power), np.nanmax(measured_power), 0]
+            )  # Ensure max power is atleast 0
+            max_power = np.nanmax(max_stacked_power)
+            min_stacked_power = np.array(
+                [np.nanmin(predicted_power), np.nanmin(measured_power), 0]
+            )  # Ensure min power is atleast 0
+            min_power = np.nanmin(min_stacked_power)
+            return min_power, max_power
+
+        def power_array_to_points(
+            self,
+            power_array: np.ndarray,
+            min_power,
+            max_power,
+            plot_height: int,
+            x_pixels: np.ndarray,
+        ):
+            # Normalized to 0-1
+            normalized_power = (power_array - min_power) / (max_power - min_power)
+            y_pixels = (1 - normalized_power) * (plot_height - 1)
+            points = list(zip(x_pixels, y_pixels, strict=False))
+            return points
+
+        def draw_full_update(
+            self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
+        ):
             try:
                 logger = self.logger
                 logger.info("Attempting full update")
@@ -246,7 +304,9 @@ if is_raspberry_pi():
                 else:
                     logger.info("Drawing plot on E-paper display")
                     # TODO: Manually draw plot
-                    plot_image = self.create_image_full_plot(df_timeline)
+                    plot_image = self.create_image_full_plot(
+                        df_timeline, curr_timeindex
+                    )
                     L_image.paste(plot_image, (0, self.height_all_icons))
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
