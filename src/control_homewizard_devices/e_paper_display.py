@@ -200,7 +200,7 @@ if is_raspberry_pi():
                 )
                 data_draw.line(measured_power_points, fill=epd.GRAY4)
 
-            # TODO: Draw a vertical line for the current time
+            # Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
                 self.logger.debug(
                     "Drawing current time line at index: %s", curr_time_pos
@@ -208,7 +208,7 @@ if is_raspberry_pi():
                 curr_time_x = x_pixels[curr_time_pos]
                 data_draw.line(
                     [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
-                    fill=epd.GRAY2,
+                    fill=epd.GRAY4,
                 )
             # TODO: Draw rectangles or something for the scheduled devices.
             # Draw line for predicted power
@@ -217,7 +217,7 @@ if is_raspberry_pi():
             predicted_power_points = self.power_array_to_points(
                 predicted_power, min_power, max_power, plot_height, x_pixels
             )
-            data_draw.line(predicted_power_points, fill=epd.GRAY3)
+            data_draw.line(predicted_power_points, fill=epd.GRAY4)
 
             plot_image.paste(data_image, top_left_point)
 
@@ -248,12 +248,34 @@ if is_raspberry_pi():
             # Get the maximum of the predicted and measured power
             # TODO: In case the scheduled devices are included into the graph -->
             # take the devices into accounting when calculating the min and max
+            max_measured = np.nanmax(measured_power, initial=0)
+            max_predicted = np.nanmax(predicted_power, initial=0)
+            self.logger.debug(
+                "Max measured power: %s, Max predicted power: %s",
+                max_measured,
+                max_predicted,
+            )
             max_stacked_power = np.array(
-                [np.nanmax(predicted_power), np.nanmax(measured_power), 0]
+                [
+                    max_predicted,
+                    max_measured,
+                    0,
+                ]
             )  # Ensure max power is atleast 0
             max_power = np.nanmax(max_stacked_power)
+            min_measured = np.nanmin(measured_power, initial=0)
+            min_predicted = np.nanmin(predicted_power, initial=0)
+            self.logger.debug(
+                "Min measured power: %s, Min predicted power: %s",
+                min_measured,
+                min_predicted,
+            )
             min_stacked_power = np.array(
-                [np.nanmin(predicted_power), np.nanmin(measured_power), 0]
+                [
+                    min_predicted,
+                    min_measured,
+                    0,
+                ]
             )  # Ensure min power is atleast 0
             min_power = np.nanmin(min_stacked_power)
             return min_power, max_power
