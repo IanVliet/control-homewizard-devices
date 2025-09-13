@@ -129,16 +129,7 @@ if is_raspberry_pi():
             plot_image = Image.new("L", (canvas_width, canvas_height), 255)
             plot_draw = ImageDraw.Draw(plot_image)
 
-            # Draw label time for x-axis
-            x_label_text = "Time"
-            x_label_w, x_label_h = self._get_text_width_and_height(
-                x_label_text, self.font
-            )
-            x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
-            y_pos_x_label = canvas_height - x_label_h
-            plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
-
-            # Draw label power for x-axis
+            # Draw label power for y-axis
             y_label_text = ColNames.POWER_W
             y_label_w, y_label_h = self._get_text_width_and_height(
                 y_label_text, self.font
@@ -152,25 +143,12 @@ if is_raspberry_pi():
             y_pos_y_label = math.ceil((canvas_height - y_label_w) / 2)
             plot_image.paste(rotated_y_label, (x_pos_y_label, y_pos_y_label))
 
-            # Draw x-axis line
+            # --- Draw data ---
             top_left_point = (y_label_h, 0)
-            bottom_left_point = (y_label_h, canvas_height - x_label_h)
-            bottom_right_point = (canvas_width, canvas_height - x_label_h)
-            plot_draw.line(
-                (top_left_point, bottom_left_point),
-                fill=epd.GRAY4,
-            )
-            # TODO: Draw the 0 line either on the bottom or
-            # if the minimum of the measured power and predicted power is less than 0
-            # draw the line at the pixel height that is closest to 0.
-            plot_draw.line(
-                (bottom_left_point, bottom_right_point),
-                fill=epd.GRAY4,
-            )
-            # Draw predicted power line
+            # Calculate the area for the plot
             plot_width, plot_height = (
                 canvas_width - y_label_h,
-                canvas_height - x_label_h,
+                canvas_height,
             )
             num_datapoints = len(df_timeline.index)
             predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
@@ -178,8 +156,14 @@ if is_raspberry_pi():
             # Get the maximum of the predicted and measured power
             # TODO: In case the scheduled devices are included into the graph -->
             # take the devices into accounting when calculating the min and max
-            max_power = np.nanmax([predicted_power, measured_power])
-            min_power = np.nanmin([predicted_power, measured_power])
+            max_stacked_power = np.array(
+                [np.nanmax(predicted_power), np.nanmax(measured_power), 0]
+            )  # Ensure max power is atleast 0
+            max_power = np.nanmax(max_stacked_power)
+            min_stacked_power = np.array(
+                [np.nanmin(predicted_power), np.nanmin(measured_power), 0]
+            )  # Ensure min power is atleast 0
+            min_power = np.nanmin(min_stacked_power)
             # Normalized to 0-1
             normalized_predicted_power = (predicted_power - min_power) / (
                 max_power - min_power
@@ -191,12 +175,39 @@ if is_raspberry_pi():
 
             # TODO: Draw the measured power up to the current time
             # TODO: Draw a vertical line for the current time
+            # TODO: Draw rectangles or something for the scheduled devices.
             points = list(zip(x_pixels, y_pixels, strict=False))
             data_draw.line(points, fill=epd.GRAY4)
 
             plot_image.paste(data_image, top_left_point)
 
-            # Draw measured power line (only be available up to the current timestep)
+            # --- Draw x-axis ---
+            # Calculate the points for the x-axis line
+            x_axis_height = (1 - (0 - min_power) / (max_power - min_power)) * (
+                plot_height - 1
+            )
+            bottom_left_point = (y_label_h, x_axis_height)
+            bottom_right_point = (canvas_width, x_axis_height)
+            # TODO: Ensure the line is not removed by the data plotting
+            plot_draw.line(
+                (top_left_point, bottom_left_point),
+                fill=epd.GRAY4,
+            )
+            # TODO: Draw the 0 line either on the bottom or
+            # if the minimum of the measured power and predicted power is less than 0
+            # draw the line at the pixel height that is closest to 0.
+            plot_draw.line(
+                (bottom_left_point, bottom_right_point),
+                fill=epd.GRAY4,
+            )
+            # Draw label time for x-axis
+            x_label_text = "Time"
+            x_label_w, x_label_h = self._get_text_width_and_height(
+                x_label_text, self.font
+            )
+            x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
+            y_pos_x_label = x_axis_height
+            plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
             return plot_image
 
         def draw_full_update(self, df_timeline: pd.DataFrame | None):
