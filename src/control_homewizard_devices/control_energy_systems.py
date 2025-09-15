@@ -75,7 +75,9 @@ class DeviceController:
         """
         Retrieves forecast data for the panels.
         """
-        today = self.START_FORECAST_TIME.at_naive_date(datetime.now().date())
+        # Since the quartz library requires a naive UTC datetime,
+        # we convert the ZonedTime to such a datetime object for today.
+        today = self.START_FORECAST_TIME.get_naive_utc_date()
         df_solar_forecast = None
         solar_panel_sites = self.solar_panel_sites
         logger = self.logger
@@ -99,9 +101,10 @@ class DeviceController:
                 raise TypeError(
                     f"Expected DatetimeIndex, got {type(df_forecast.index)}"
                 )
+
             df_solar_forecast.index = df_solar_forecast.index.tz_localize(
-                self.START_FORECAST_TIME.tz
-            )
+                "UTC"
+            ).tz_convert(self.START_FORECAST_TIME.tz)
             self.logger.info("Daily power forecast retrieved successfully.")
         else:
             self.logger.error("Failed to retrieve any daily power forecast.")

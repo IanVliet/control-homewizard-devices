@@ -85,12 +85,16 @@ class ZonedTime:
         )
         return self.at_date(next_date)
 
-    def at_naive_date(self, d: date) -> datetime:
+    def get_naive_utc_date(self) -> datetime:
         """
-        Returns a naive datetime object for the given date
-        with the time set to the hour and minute of this ZonedTime.
+        Returns a naive datetime object (in UTC) for today's date
+        with the time based on the hour and minute of this ZonedTime.
         """
-        return datetime.combine(d, time(self.hour, self.minute))
+        today = datetime.now(self.tz).date()
+        local_dt = self.at_date(today)
+        # Convert to UTC and make naive
+        utc_dt = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+        return utc_dt
 
     def seconds_until_next(self) -> float:
         """
