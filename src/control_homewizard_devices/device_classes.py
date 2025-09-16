@@ -76,8 +76,8 @@ class CompleteDevice:
 
     def get_instantaneous_power(self):
         """
-        For a general device, we assume that this power can not be freed,
-        therefore we should just return power
+        For a general device, we assume the measured power directly indicates
+        the available power, therefore we return power
         """
         return self.inst_power_usage
 
@@ -105,7 +105,7 @@ class P1Device(CompleteDevice):
 
     def get_instantaneous_power(self):
         """
-        For the P1 a negative power means that is the available power,
+        For the P1 a measured positive power already indicates the available power,
         therefore we should just return power
         """
         return self.inst_power_usage
@@ -213,9 +213,9 @@ class SocketDevice(CompleteDevice):
         """
         For a socket a positive power indicates the power used by the socket,
         which can be made free by turning the socket off -->
-        therefore this power should count to available power.
-        Since we define available power as negative power
-         the function should return -power
+        therefore this power should count to total available power.
+        We define available power as the negative of the power measurement.
+        Therefore, the function should return -power
         """
         if self.inst_power_usage is None:
             return None
@@ -302,6 +302,19 @@ class Battery(CompleteDevice):
         if self.state_of_charge_pct is not None:
             self.energy_stored = self.energy_capacity * self.state_of_charge_pct / 100
             logger.info(f"{self.device_name} energy stored: {self.energy_stored} Wh")
+
+    def get_instantaneous_power(self):
+        """
+        For a battery a positive power indicates the power used by the battery,
+        which can be made free -->
+        therefore this power should count to total available power.
+        We define available power as the negative of the power measurement.
+        Therefore, the function should return -power
+        """
+        if self.inst_power_usage is None:
+            return None
+        else:
+            return -self.inst_power_usage
 
 
 class DeviceSchedulePolicy:
