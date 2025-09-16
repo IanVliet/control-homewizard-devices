@@ -181,7 +181,6 @@ if is_raspberry_pi():
             else:
                 curr_time_pos = None
 
-            # TODO: Draw the measured power up to the current time
             if curr_time_pos is not None:
                 measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
                 notnan_mask = ~np.isnan(measured_power)
@@ -237,23 +236,26 @@ if is_raspberry_pi():
             plot_image.paste(data_image, top_left_point)
 
             # --- Draw x-axis ---
-            # Calculate the points for the x-axis line
-            x_axis_height = (1 - (0 - min_power) / (max_power - min_power)) * (
+            # Calculate the points for the zero line
+            zero_height = (1 - (0 - min_power) / (max_power - min_power)) * (
                 plot_height - 1
             )
-            bottom_left_point = (y_label_h, x_axis_height)
-            bottom_right_point = (canvas_width, x_axis_height)
+            zero_left_point = (y_label_h, zero_height)
+            zero_right_point = (canvas_width, zero_height)
+            # Draw the line where the power is 0 (y=0)
+            plot_draw.line((zero_left_point, zero_right_point), fill=epd.GRAY4)
+            # Draw the y-axis line
             plot_draw.line(
                 (top_left_point, (y_label_h, plot_height - 1)),
                 fill=epd.GRAY4,
             )
-            # Draw the x-axis line where the power is 0 (y=0)
+            # Draw x-line at the bottom
             plot_draw.line(
-                (bottom_left_point, bottom_right_point),
+                ((y_label_h, plot_height - 1), (canvas_width, plot_height - 1)),
                 fill=epd.GRAY4,
             )
             # Draw label time for x-axis
-            y_pos_x_label = x_axis_height
+            y_pos_x_label = canvas_height - x_label_h
             plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
             return plot_image
 
