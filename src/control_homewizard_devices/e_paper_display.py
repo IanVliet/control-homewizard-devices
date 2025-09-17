@@ -122,8 +122,15 @@ if is_raspberry_pi():
             )
 
         def create_image_full_plot(
-            self, df_timeline: pd.DataFrame, curr_timeindex: datetime | None
+            self, df_timeline: pd.DataFrame, curr_timeindex: datetime
         ) -> Image.Image:
+            if not isinstance(df_timeline.index, pd.DatetimeIndex):
+                error_msg = (
+                    "Expected DatetimeIndex when drawing plot, "
+                    f"got {type(df_timeline.index)}"
+                )
+                self.logger.error(error_msg)
+                raise TypeError(error_msg)
             epd = self.epd
             canvas_width, canvas_height = (
                 epd.width,
@@ -133,6 +140,7 @@ if is_raspberry_pi():
             plot_draw = ImageDraw.Draw(plot_image)
 
             # Draw label power for y-axis
+            # TODO: Draw label in kw.
             y_label_text = ColNames.POWER_W
             y_label_w, y_label_h = self._get_text_width_and_height(
                 y_label_text, self.font
@@ -144,6 +152,7 @@ if is_raspberry_pi():
             rotated_y_label = y_label_image.rotate(90, expand=True)
             x_pos_y_label = 0
             y_pos_y_label = math.ceil((canvas_height - y_label_w) / 2)
+            # TODO: Ensure the y-label does not overlap with the ticks.
             plot_image.paste(rotated_y_label, (x_pos_y_label, y_pos_y_label))
 
             # Calculate position x position and space needed for x-axis label
@@ -151,14 +160,32 @@ if is_raspberry_pi():
             x_label_w, x_label_h = self._get_text_width_and_height(
                 x_label_text, self.font
             )
-            x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
+            # Determine the ticks and labels for the x-axis
+            hour_format = "%H:%M"
+            start_time_tick = df_timeline.index[0]
+            end_time_tick = df_timeline.index[-1]
+            formatted_start_time = start_time_tick.strftime(hour_format)
+            formatted_end_time = end_time_tick.strftime(hour_format)
+
+            self.logger.debug("Formating current time label")
+            formatted_current_time = curr_timeindex.strftime(hour_format)
+            curr_time_label_w, curr_time_label_h = self._get_text_width_and_height(
+                formatted_current_time, self.font
+            )
+            # Calculate max height needed for different x-axis ticks and labels
+            max_x_label_h = max(
+                x_label_h,
+                self._get_text_width_and_height(formatted_start_time, self.font)[1],
+                self._get_text_width_and_height(formatted_end_time, self.font)[1],
+                curr_time_label_h,
+            )
 
             # --- Draw data ---
             top_left_point = (y_label_h, 0)
             # Calculate the area for the plot
             plot_width, plot_height = (
                 canvas_width - y_label_h,
-                canvas_height - x_label_h,
+                canvas_height - max_x_label_h,
             )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
             self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
@@ -171,13 +198,8 @@ if is_raspberry_pi():
 
             self.logger.debug("Current timeindex: %s", curr_timeindex)
             # Get the position of the current time index
-            if curr_timeindex is not None:
-                if curr_timeindex in df_timeline.index:
-                    curr_time_pos = int(
-                        df_timeline.index.get_indexer([curr_timeindex])[0]
-                    )
-                else:
-                    curr_time_pos = None
+            if curr_timeindex in df_timeline.index:
+                curr_time_pos = int(df_timeline.index.get_indexer([curr_timeindex])[0])
             else:
                 curr_time_pos = None
 
@@ -224,6 +246,16 @@ if is_raspberry_pi():
                     [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
                     fill=epd.GRAY4,
                 )
+                self.logger.debug("Drawing current time label")
+                x_pos_current_time = curr_time_x - curr_time_label_w // 2
+                plot_draw.text(
+                    (
+                        x_pos_current_time,
+                        canvas_width - max_x_label_h,
+                    ),
+                    formatted_current_time,
+                    fill=epd.GRAY4,
+                )
             # TODO: Draw rectangles or something for the scheduled devices.
             # Draw line for predicted power
             self.logger.debug("Drawing predicted power line")
@@ -235,7 +267,7 @@ if is_raspberry_pi():
 
             plot_image.paste(data_image, top_left_point)
 
-            # --- Draw x-axis ---
+            # --- Draw lines for axes ---
             # Calculate the points for the zero line
             zero_height = (1 - (0 - min_power) / (max_power - min_power)) * (
                 plot_height - 1
@@ -255,8 +287,27 @@ if is_raspberry_pi():
                 fill=epd.GRAY4,
             )
             # Draw label time for x-axis
-            y_pos_x_label = canvas_height - x_label_h
+            # TODO: Check if the label fits, otherwise move it to the right or left
+            x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
+            y_pos_x_label = canvas_height - max_x_label_h
+            try:
+                x_pos_x_label = self.get_position_label_avoid_overlap(
+                    curr_time_x, curr_time_label_w, x_label_w, canvas_width
+                )
+            except NameError:
+                self.logger.error(
+                    "No position for current time tick, "
+                    "so no overlap between tick for current time and x-label possible"
+                )
             plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
+            # TODO: Group relevant codes together into logical positions and functions
+            # TODO: Draw ticks on y axis
+            # Find max power closest to a multiple of 1000. (shown in kW)
+            # If it isn't found use a multiple of 100.
+            # Draw tick for 0 line.
+
+            # TODO: Draw the start and end tick on the x-axis.
+            # only in case they do not overlap with the current tick.
             return plot_image
 
         def calculate_min_max_power(self, df_timeline: pd.DataFrame):
@@ -311,6 +362,35 @@ if is_raspberry_pi():
             points = list(zip(x_pixels, y_pixels, strict=False))
             return points
 
+        def get_position_label_avoid_overlap(
+            self,
+            tick_start_pos: int,
+            tick_length: int,
+            label_length: int,
+            total_length: int,
+        ):
+            init_label_start_pos = (total_length - label_length) // 2
+            init_label_end_pos = init_label_start_pos + label_length
+            tick_end_pos = tick_start_pos + tick_length
+            diff_tick_end_to_label = init_label_start_pos - tick_end_pos
+            diff_label_end_to_label = tick_start_pos - init_label_end_pos
+            # Two cases for overlap:
+            # 1. Tick is left of center and would overlap with label
+            # (End of tick is past the start of the label)
+            # --> move label to the right
+            # 2. Tick is right of center and would overlap with label
+            # (End of label is past the start of the tick)
+            # --> move label to the left
+            overlap = diff_tick_end_to_label < 0 and diff_label_end_to_label < 0
+            left_sided = diff_tick_end_to_label >= diff_label_end_to_label
+            if overlap and left_sided:
+                pos_label = init_label_start_pos - diff_tick_end_to_label
+            elif overlap and not left_sided:
+                pos_label = init_label_start_pos + diff_label_end_to_label
+            else:
+                pos_label = init_label_start_pos
+            return pos_label
+
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
         ):
@@ -350,10 +430,15 @@ if is_raspberry_pi():
                 else:
                     logger.info("Drawing plot on E-paper display")
                     # TODO: Manually draw plot
-                    plot_image = self.create_image_full_plot(
-                        df_timeline, curr_timeindex
-                    )
-                    L_image.paste(plot_image, (0, self.height_all_icons))
+                    if curr_timeindex is None:
+                        logger.error(
+                            "Current timeindex is None, so no plot will be drawn"
+                        )
+                    else:
+                        plot_image = self.create_image_full_plot(
+                            df_timeline, curr_timeindex
+                        )
+                        L_image.paste(plot_image, (0, self.height_all_icons))
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()
