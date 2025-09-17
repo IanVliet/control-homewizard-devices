@@ -247,11 +247,11 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
                 self.logger.debug("Drawing current time label")
-                x_pos_current_time = curr_time_x - curr_time_label_w // 2
+                x_pos_current_time = curr_time_x - curr_time_label_w // 2 + y_label_h
                 plot_draw.text(
                     (
                         x_pos_current_time,
-                        canvas_width - max_x_label_h,
+                        canvas_height - max_x_label_h,
                     ),
                     formatted_current_time,
                     fill=epd.GRAY4,
