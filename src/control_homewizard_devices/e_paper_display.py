@@ -165,7 +165,13 @@ if is_raspberry_pi():
             start_time_tick = df_timeline.index[0]
             end_time_tick = df_timeline.index[-1]
             formatted_start_time = start_time_tick.strftime(hour_format)
+            start_time_w, start_time_h = self._get_text_width_and_height(
+                formatted_start_time, self.font
+            )
             formatted_end_time = end_time_tick.strftime(hour_format)
+            end_time_w, end_time_h = self._get_text_width_and_height(
+                formatted_end_time, self.font
+            )
 
             self.logger.debug("Formating current time label")
             formatted_current_time = curr_timeindex.strftime(hour_format)
@@ -175,16 +181,18 @@ if is_raspberry_pi():
             # Calculate max height needed for different x-axis ticks and labels
             max_x_label_h = max(
                 x_label_h,
-                self._get_text_width_and_height(formatted_start_time, self.font)[1],
-                self._get_text_width_and_height(formatted_end_time, self.font)[1],
+                start_time_h,
+                end_time_h,
                 curr_time_label_h,
             )
 
+            # Calculate max width needed for y-axis
+            max_y_label_w = max(y_label_h, math.ceil(start_time_w / 2))
             # --- Draw data ---
-            top_left_point = (y_label_h, 0)
+            top_left_point = (max_y_label_w, 0)
             # Calculate the area for the plot
             plot_width, plot_height = (
-                canvas_width - y_label_h,
+                canvas_width - max_y_label_w,
                 canvas_height - max_x_label_h,
             )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
@@ -247,7 +255,9 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
                 self.logger.debug("Drawing current time label")
-                x_pos_current_time = curr_time_x - curr_time_label_w // 2 + y_label_h
+                x_pos_current_time = (
+                    curr_time_x - curr_time_label_w // 2 + max_y_label_w
+                )
                 plot_draw.text(
                     (
                         x_pos_current_time,
@@ -272,18 +282,18 @@ if is_raspberry_pi():
             zero_height = (1 - (0 - min_power) / (max_power - min_power)) * (
                 plot_height - 1
             )
-            zero_left_point = (y_label_h, zero_height)
+            zero_left_point = (max_y_label_w, zero_height)
             zero_right_point = (canvas_width, zero_height)
             # Draw the line where the power is 0 (y=0)
             plot_draw.line((zero_left_point, zero_right_point), fill=epd.GRAY4)
             # Draw the y-axis line
             plot_draw.line(
-                (top_left_point, (y_label_h, plot_height - 1)),
+                (top_left_point, (max_y_label_w, plot_height - 1)),
                 fill=epd.GRAY4,
             )
             # Draw x-line at the bottom
             plot_draw.line(
-                ((y_label_h, plot_height - 1), (canvas_width, plot_height - 1)),
+                ((max_y_label_w, plot_height - 1), (canvas_width, plot_height - 1)),
                 fill=epd.GRAY4,
             )
             # Draw label time for x-axis
@@ -292,7 +302,7 @@ if is_raspberry_pi():
             y_pos_x_label = canvas_height - max_x_label_h
             try:
                 x_pos_x_label = self.get_position_label_avoid_overlap(
-                    curr_time_x, curr_time_label_w, x_label_w, canvas_width
+                    x_pos_current_time, curr_time_label_w, x_label_w, canvas_width
                 )
             except NameError:
                 self.logger.error(
@@ -300,14 +310,28 @@ if is_raspberry_pi():
                     "so no overlap between tick for current time and x-label possible"
                 )
             plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
+            # Draw the start and end tick on the x-axis.
+            # Only in case they do not overlap with the current tick.
+            if x_pos_current_time > max_y_label_w + math.ceil(start_time_w / 2):
+                plot_draw.text(
+                    (max_y_label_w - start_time_w // 2, y_pos_x_label),
+                    formatted_start_time,
+                    fill=epd.GRAY4,
+                )
+            if x_pos_current_time < canvas_width - end_time_w:
+                # Note that the end time is not centered
+                plot_draw.text(
+                    (canvas_width - end_time_w, y_pos_x_label),
+                    formatted_end_time,
+                    fill=epd.GRAY4,
+                )
+
             # TODO: Group relevant codes together into logical positions and functions
             # TODO: Draw ticks on y axis
             # Find max power closest to a multiple of 1000. (shown in kW)
             # If it isn't found use a multiple of 100.
             # Draw tick for 0 line.
 
-            # TODO: Draw the start and end tick on the x-axis.
-            # only in case they do not overlap with the current tick.
             return plot_image
 
         def calculate_min_max_power(self, df_timeline: pd.DataFrame):
