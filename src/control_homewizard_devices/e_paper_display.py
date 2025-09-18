@@ -469,20 +469,16 @@ if is_raspberry_pi():
             First an attempt is made to get a multiple of 1000.
             If that is not possible a multiple of 100 is used.
             """
-            upper_tick = int(max_power // 1000)
-            formatted_upper_tick = str(upper_tick)
-            if upper_tick == 0:
-                upper_tick = math.ceil(max_power // 100) * 0.1
-                formatted_upper_tick = f"{upper_tick:.1f}"
-            elif upper_tick < 0:
+            # Has to round down for upper tick (so it doesn't fall off the image)
+            upper_tick = math.floor(max_power / 100) * 0.1
+            formatted_upper_tick = f"{upper_tick:.1f}"
+            if upper_tick < 0:
                 upper_tick = 0
                 formatted_upper_tick = "0"
-            lower_tick = math.ceil(min_power / 1000)
-            formatted_lower_tick = str(lower_tick)
-            if lower_tick == 0:
-                lower_tick = math.ceil(min_power / 100) * 0.1
-                formatted_lower_tick = f"{lower_tick:.1f}"
-            elif lower_tick > 0:
+            # Has to round up for lower tick (so it doesn't fall off the image)
+            lower_tick = math.ceil(min_power / 100) * 0.1
+            formatted_lower_tick = f"{lower_tick:.1f}"
+            if lower_tick > 0:
                 lower_tick = 0
                 formatted_lower_tick = "0"
             return (
