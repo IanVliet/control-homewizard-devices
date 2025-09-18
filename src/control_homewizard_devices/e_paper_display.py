@@ -350,7 +350,7 @@ if is_raspberry_pi():
                 )
 
             # TODO: Group relevant codes together into logical positions and functions
-            # TODO: Ensure the ticks are only drawn if they do not overlap with the zero label.
+            # TODO: Ensure the ticks are drawn if they do not overlap with zero label.
             # Draw the max tick on the y-axis
             plot_draw.text(
                 (
