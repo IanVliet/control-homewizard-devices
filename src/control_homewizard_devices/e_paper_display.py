@@ -179,6 +179,7 @@ if is_raspberry_pi():
                 formatted_current_time, self.font
             )
             # Calculate max height needed for different x-axis ticks and labels
+            # TODO: Take the lower tick of the y-axis into account.
             max_x_label_h = max(
                 x_label_h,
                 start_time_h,
@@ -199,13 +200,19 @@ if is_raspberry_pi():
                 formatted_lower_tick_y,
                 formatted_upper_tick_y,
             )
+            formatted_lower_tick_y_w, formatted_lower_tick_y_h = (
+                self._get_text_width_and_height(formatted_lower_tick_y, self.font)
+            )
+            formatted_upper_tick_y_w, formatted_upper_tick_y_h = (
+                self._get_text_width_and_height(formatted_upper_tick_y, self.font)
+            )
 
             # Calculate max width needed for y-axis
             max_y_label_w = max(
                 y_label_h,
                 math.ceil(start_time_w / 2),
-                self._get_text_width_and_height(formatted_lower_tick_y, self.font)[0],
-                self._get_text_width_and_height(formatted_upper_tick_y, self.font)[0],
+                formatted_lower_tick_y_w,
+                formatted_upper_tick_y_w,
             )
             # --- Draw data ---
             top_left_point = (max_y_label_w, 0)
@@ -336,22 +343,22 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
             if x_pos_current_time < canvas_width - end_time_w:
-                # Note that the end time is not centered
                 plot_draw.text(
-                    (canvas_width - end_time_w, y_pos_x_label),
+                    (canvas_width - end_time_w // 2, y_pos_x_label),
                     formatted_end_time,
                     fill=epd.GRAY4,
                 )
 
             # TODO: Group relevant codes together into logical positions and functions
-            # TODO: Draw ticks on y axis
+            # TODO: Ensure the ticks are only drawn if they do not overlap with the zero label.
             # Draw the max tick on the y-axis
             plot_draw.text(
                 (
                     0,
                     self.power_value_to_y_pixel(
                         upper_tick_y, min_power, max_power, plot_height
-                    ),
+                    )
+                    - formatted_upper_tick_y_h // 2,
                 ),
                 formatted_upper_tick_y,
                 fill=epd.GRAY4,
@@ -362,7 +369,8 @@ if is_raspberry_pi():
                     0,
                     self.power_value_to_y_pixel(
                         lower_tick_y, min_power, max_power, plot_height
-                    ),
+                    )
+                    - formatted_lower_tick_y_h // 2,
                 ),
                 formatted_lower_tick_y,
                 fill=epd.GRAY4,
