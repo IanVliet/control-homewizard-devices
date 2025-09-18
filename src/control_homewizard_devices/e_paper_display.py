@@ -185,9 +185,21 @@ if is_raspberry_pi():
                 end_time_h,
                 curr_time_label_h,
             )
+            min_power, max_power = self.calculate_min_max_power(df_timeline)
+            self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
+            lower_tick_y, upper_tick_y = self.get_y_axis_tick_values(
+                min_power, max_power
+            )
+            formatted_lower_tick_y = str(lower_tick_y)
+            formatted_upper_tick_y = str(upper_tick_y)
 
             # Calculate max width needed for y-axis
-            max_y_label_w = max(y_label_h, math.ceil(start_time_w / 2))
+            max_y_label_w = max(
+                y_label_h,
+                math.ceil(start_time_w / 2),
+                self._get_text_width_and_height(formatted_lower_tick_y, self.font)[0],
+                self._get_text_width_and_height(formatted_upper_tick_y, self.font)[0],
+            )
             # --- Draw data ---
             top_left_point = (max_y_label_w, 0)
             # Calculate the area for the plot
@@ -195,8 +207,6 @@ if is_raspberry_pi():
                 canvas_width - max_y_label_w,
                 canvas_height - max_x_label_h,
             )
-            min_power, max_power = self.calculate_min_max_power(df_timeline)
-            self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
             # Convert the time series to pixel positions
             num_datapoints = len(df_timeline.index)
             x_pixels = np.linspace(0, plot_width - 1, num_datapoints)
@@ -279,8 +289,8 @@ if is_raspberry_pi():
 
             # --- Draw lines for axes ---
             # Calculate the points for the zero line
-            zero_height = (1 - (0 - min_power) / (max_power - min_power)) * (
-                plot_height - 1
+            zero_height = self.power_value_to_y_pixel(
+                0, min_power, max_power, plot_height
             )
             zero_left_point = (max_y_label_w, zero_height)
             zero_right_point = (canvas_width, zero_height)
@@ -328,8 +338,28 @@ if is_raspberry_pi():
 
             # TODO: Group relevant codes together into logical positions and functions
             # TODO: Draw ticks on y axis
-            # Find max power closest to a multiple of 1000. (shown in kW)
-            # If it isn't found use a multiple of 100.
+            # Draw the max tick on the y-axis
+            plot_draw.text(
+                (
+                    0,
+                    self.power_value_to_y_pixel(
+                        upper_tick_y, min_power, max_power, plot_height
+                    ),
+                ),
+                formatted_upper_tick_y,
+                fill=epd.GRAY4,
+            )
+            # Draw the min tick on the y-axis
+            plot_draw.text(
+                (
+                    0,
+                    self.power_value_to_y_pixel(
+                        lower_tick_y, min_power, max_power, plot_height
+                    ),
+                ),
+                formatted_lower_tick_y,
+                fill=epd.GRAY4,
+            )
             # Draw tick for 0 line.
 
             return plot_image
@@ -386,6 +416,17 @@ if is_raspberry_pi():
             points = list(zip(x_pixels, y_pixels, strict=False))
             return points
 
+        def power_value_to_y_pixel(
+            self,
+            power_value: float,
+            min_power: float,
+            max_power: float,
+            plot_height: int,
+        ):
+            normalized_power = (power_value - min_power) / (max_power - min_power)
+            y_pixel = (1 - normalized_power) * (plot_height - 1)
+            return y_pixel
+
         def get_position_label_avoid_overlap(
             self,
             tick_start_pos: int,
@@ -414,6 +455,24 @@ if is_raspberry_pi():
             else:
                 pos_label = init_label_start_pos
             return pos_label
+
+        def get_y_axis_tick_values(self, min_power: float, max_power: float):
+            """
+            Get an upper and lower tick value for the y-axis.
+            First an attempt is made to get a multiple of 1000.
+            If that is not possible a multiple of 100 is used.
+            """
+            max_tick = max_power // 1000
+            if max_tick == 0:
+                max_tick = max_power // 100
+            elif max_tick < 0:
+                max_tick = 0
+            min_tick = min_power // 1000
+            if min_tick == 0:
+                min_tick = min_power // 100
+            elif min_tick > 0:
+                min_tick = 0
+            return int(min_tick), int(max_tick)
 
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
