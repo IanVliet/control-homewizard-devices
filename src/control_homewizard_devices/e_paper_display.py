@@ -187,11 +187,18 @@ if is_raspberry_pi():
             )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
             self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
-            lower_tick_y, upper_tick_y = self.get_y_axis_tick_values(
-                min_power, max_power
+            (
+                lower_tick_y,
+                upper_tick_y,
+                formatted_lower_tick_y,
+                formatted_upper_tick_y,
+            ) = self.get_y_axis_tick_values(min_power, max_power)
+
+            self.logger.debug(
+                "Y-axis ticks: lower: %s, upper: %s",
+                formatted_lower_tick_y,
+                formatted_upper_tick_y,
             )
-            formatted_lower_tick_y = str(lower_tick_y)
-            formatted_upper_tick_y = str(upper_tick_y)
 
             # Calculate max width needed for y-axis
             max_y_label_w = max(
@@ -462,17 +469,28 @@ if is_raspberry_pi():
             First an attempt is made to get a multiple of 1000.
             If that is not possible a multiple of 100 is used.
             """
-            max_tick = max_power // 1000
-            if max_tick == 0:
-                max_tick = max_power // 100
-            elif max_tick < 0:
-                max_tick = 0
-            min_tick = min_power // 1000
-            if min_tick == 0:
-                min_tick = min_power // 100
-            elif min_tick > 0:
-                min_tick = 0
-            return int(min_tick), int(max_tick)
+            upper_tick = int(max_power // 1000)
+            formatted_upper_tick = str(upper_tick)
+            if upper_tick == 0:
+                upper_tick = math.ceil(max_power // 100) * 0.1
+                formatted_upper_tick = f"{upper_tick:.1f}"
+            elif upper_tick < 0:
+                upper_tick = 0
+                formatted_upper_tick = "0"
+            lower_tick = math.ceil(min_power / 1000)
+            formatted_lower_tick = str(lower_tick)
+            if lower_tick == 0:
+                lower_tick = math.ceil(min_power / 100) * 0.1
+                formatted_lower_tick = f"{lower_tick:.1f}"
+            elif lower_tick > 0:
+                lower_tick = 0
+                formatted_lower_tick = "0"
+            return (
+                lower_tick * 1000,
+                upper_tick * 1000,
+                formatted_lower_tick,
+                formatted_upper_tick,
+            )
 
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
