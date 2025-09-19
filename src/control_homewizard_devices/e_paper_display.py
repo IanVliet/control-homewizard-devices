@@ -38,7 +38,7 @@ if is_raspberry_pi():
                 logger.info("Setting up E-paper display class")
                 self.epd = epd4in2_V2.EPD()
                 logger.info("Init and clear E-paper display")
-                self.epd.Init_4Gray()
+                self.epd.init()
                 self.epd.Clear()
                 self.font = ImageFont.load_default(size=FONT_SIZE)
                 (
@@ -301,6 +301,7 @@ if is_raspberry_pi():
 
             plot_image.paste(data_image, top_left_point)
 
+            # TODO: Properly clear the screen between updates to avoid ghosting
             # --- Draw lines for axes ---
             # Calculate the points for the zero line
             zero_height = self.power_value_to_y_pixel(
@@ -308,6 +309,7 @@ if is_raspberry_pi():
             )
             zero_left_point = (max_y_label_w, zero_height)
             zero_right_point = (canvas_width, zero_height)
+
             # Draw the line where the power is 0 (y=0)
             plot_draw.line((zero_left_point, zero_right_point), fill=epd.GRAY4)
             # Draw the y-axis line
@@ -343,6 +345,7 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
             if x_pos_current_time < canvas_width - end_time_w:
+                # TODO: Ensure the tick does not fall off the display.
                 plot_draw.text(
                     (canvas_width - end_time_w // 2, y_pos_x_label),
                     formatted_end_time,
@@ -503,8 +506,9 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Attempting full update")
                 epd = self.epd
-                epd.Init_4Gray()
+                epd.init()
                 epd.Clear()
+                epd.Init_4Gray()
                 font = self.font
                 L_image = Image.new("L", (epd.width, epd.height), 255)
                 draw = ImageDraw.Draw(L_image)
@@ -560,7 +564,7 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Clearing E-paper display")
                 epd = self.epd
-                epd.Init_4Gray()
+                epd.init()
                 epd.Clear()
                 logger.info("Sleep E-paper display")
                 epd.sleep()
