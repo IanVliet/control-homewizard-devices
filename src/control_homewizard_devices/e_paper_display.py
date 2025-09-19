@@ -38,7 +38,7 @@ if is_raspberry_pi():
                 logger.info("Setting up E-paper display class")
                 self.epd = epd4in2_V2.EPD()
                 logger.info("Init and clear E-paper display")
-                self.epd.init()
+                self.epd.Init_4Gray()
                 self.epd.Clear()
                 self.font = ImageFont.load_default(size=FONT_SIZE)
                 (
@@ -136,7 +136,7 @@ if is_raspberry_pi():
                 epd.width,
                 epd.height - self.height_all_icons,
             )
-            plot_image = Image.new("L", (canvas_width, canvas_height), 255)
+            plot_image = Image.new("L", (canvas_width, canvas_height), epd.GRAY1)
             plot_draw = ImageDraw.Draw(plot_image)
 
             # Draw label power for y-axis
@@ -266,7 +266,7 @@ if is_raspberry_pi():
                         plot_height,
                         x_pixels[notnan_pos : curr_time_pos + 1],
                     )
-                    data_draw.line(measured_power_points, fill=epd.GRAY4)
+                    data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
 
             # Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
@@ -297,7 +297,7 @@ if is_raspberry_pi():
             predicted_power_points = self.power_array_to_points(
                 predicted_power, min_power, max_power, plot_height, x_pixels
             )
-            data_draw.line(predicted_power_points, fill=epd.GRAY4)
+            data_draw.line(predicted_power_points, fill=epd.GRAY2, width=2)
 
             plot_image.paste(data_image, top_left_point)
 
@@ -503,7 +503,7 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Attempting full update")
                 epd = self.epd
-                epd.init()
+                epd.Init_4Gray()
                 epd.Clear()
                 font = self.font
                 L_image = Image.new("L", (epd.width, epd.height), 255)
@@ -560,7 +560,7 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Clearing E-paper display")
                 epd = self.epd
-                epd.init()
+                epd.Init_4Gray()
                 epd.Clear()
                 logger.info("Sleep E-paper display")
                 epd.sleep()
