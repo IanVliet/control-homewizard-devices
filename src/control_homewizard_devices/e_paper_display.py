@@ -267,6 +267,22 @@ if is_raspberry_pi():
                         x_pixels[notnan_pos : curr_time_pos + 1],
                     )
                     data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
+                    self.logger.debug("Drawing scheduled devices")
+                    # TODO: Draw rectangles or something for the scheduled devices.
+                    # TODO: Try an icon for indicating which line belong to which device.
+                    # TODO: Consider what to do when the icon does not fit between the line
+                    # and the lower part (either the 0 line or a line from another device).
+                    self.draw_device_schedule(
+                        data_draw,
+                        min_power,
+                        max_power,
+                        plot_height,
+                        x_pixels,
+                        df_timeline,
+                        notnan_mask,
+                        notnan_pos,
+                        curr_time_pos,
+                    )
 
             # Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
@@ -290,7 +306,7 @@ if is_raspberry_pi():
                     formatted_current_time,
                     fill=epd.GRAY4,
                 )
-            # TODO: Draw rectangles or something for the scheduled devices.
+
             # Draw line for predicted power
             self.logger.debug("Drawing predicted power line")
             predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
@@ -301,7 +317,6 @@ if is_raspberry_pi():
 
             plot_image.paste(data_image, top_left_point)
 
-            # TODO: Properly clear the screen between updates to avoid ghosting
             # --- Draw lines for axes ---
             # Calculate the points for the zero line
             zero_height = self.power_value_to_y_pixel(
@@ -323,7 +338,6 @@ if is_raspberry_pi():
                 fill=epd.GRAY4,
             )
             # Draw label time for x-axis
-            # TODO: Check if the label fits, otherwise move it to the right or left
             x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
             y_pos_x_label = canvas_height - max_x_label_h
             try:
@@ -499,6 +513,70 @@ if is_raspberry_pi():
                 formatted_upper_tick,
             )
 
+        def draw_device_schedule(
+            self,
+            draw: ImageDraw.ImageDraw,
+            min_power,
+            max_power,
+            plot_height: int,
+            x_pixels: np.ndarray,
+            df_timeline: pd.DataFrame,
+            notnan_mask: np.ndarray,
+            notnan_pos: int,
+            curr_time_pos: int,
+        ):
+            prev_measured_power_array = np.zeros(curr_time_pos + 1 - notnan_pos)
+            prev_predicted_power_array = np.zeros(len(x_pixels) - curr_time_pos - 1)
+            for device in self.devices:
+                if not isinstance(device, SocketDevice):
+                    continue
+                power_array = df_timeline[
+                    TimelineColNames.measured_power_consumption(device)
+                ].to_numpy()
+                # Notnan mask should match the measured power array
+                if not np.array_equal(notnan_mask, ~np.isnan(power_array)):
+                    error_msg = (
+                        "The not-nan mask does not match the measured power array "
+                        f"for device {device.device_name}. "
+                    )
+                    self.logger.error(error_msg)
+                    raise ValueError(error_msg)
+
+                sliced_measured_power_array = power_array[
+                    notnan_pos : curr_time_pos + 1
+                ]
+                stacked_measured_power_array = (
+                    prev_measured_power_array + sliced_measured_power_array
+                )
+                prev_measured_power_array = stacked_measured_power_array
+                measured_power_points = self.power_array_to_points(
+                    stacked_measured_power_array,
+                    min_power,
+                    max_power,
+                    plot_height,
+                    x_pixels[notnan_pos : curr_time_pos + 1],
+                )
+                draw.line(measured_power_points, fill=self.epd.GRAY3, width=1)
+
+                predicted_power_array = df_timeline[
+                    TimelineColNames.predicted_power_consumption(device)
+                ].to_numpy()
+                sliced_predicted_power_array = predicted_power_array[
+                    curr_time_pos + 1 :
+                ]
+                stacked_predicted_power_array = (
+                    sliced_predicted_power_array + prev_predicted_power_array
+                )
+                prev_predicted_power_array = stacked_predicted_power_array
+                predicted_power_points = self.power_array_to_points(
+                    stacked_predicted_power_array,
+                    min_power,
+                    max_power,
+                    plot_height,
+                    x_pixels[curr_time_pos + 1 :],
+                )
+                draw.line(predicted_power_points, fill=self.epd.GRAY2, width=1)
+
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
         ):
@@ -507,6 +585,7 @@ if is_raspberry_pi():
                 logger.info("Attempting full update")
                 epd = self.epd
                 epd.init()
+                # TODO: Test/Consider whether clear is needed.
                 epd.Clear()
                 epd.Init_4Gray()
                 font = self.font
