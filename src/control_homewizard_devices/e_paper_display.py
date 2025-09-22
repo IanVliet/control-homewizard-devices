@@ -269,9 +269,8 @@ if is_raspberry_pi():
                     data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
                     self.logger.debug("Drawing scheduled devices")
                     # TODO: Draw rectangles or something for the scheduled devices.
-                    # TODO: Try an icon for indicating which line belong to which device.
-                    # TODO: Consider what to do when the icon does not fit between the line
-                    # and the lower part (either the 0 line or a line from another device).
+                    # TODO: Try an icon of each device under the line.
+                    # TODO: Consider what to do when the icon does not fit
                     self.draw_device_schedule(
                         data_draw,
                         min_power,
