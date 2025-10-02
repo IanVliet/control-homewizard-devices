@@ -11,3 +11,6 @@ IS_FULL_POWER_RATIO = 0.1
 AGGREGATE_BATTERY = "aggregate_battery"
 
 TZ = ZoneInfo("Europe/Amsterdam")
+
+ICON_SIZE = 48
+FONT_SIZE = 16

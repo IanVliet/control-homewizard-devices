@@ -7,6 +7,7 @@ import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from control_homewizard_devices.schedule_devices import ColNames
 from control_homewizard_devices.utils import is_raspberry_pi, TimelineColNames
+from control_homewizard_devices.constants import ICON_SIZE, FONT_SIZE
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -24,9 +25,6 @@ if os.path.exists(waveshare_lib) and waveshare_lib not in sys.path:
 if is_raspberry_pi():
     from waveshare_epd import epd4in2_V2  # noqa: E402
 
-    ICON_SIZE = 48
-    FONT_SIZE = 16
-
     class DrawDisplay:
         def __init__(
             self, devices: list[SocketDevice | Battery], logger: logging.Logger
@@ -34,6 +32,9 @@ if is_raspberry_pi():
             self.devices = devices
             self.logger = logger
             self.resized_icons = self.get_resized_icons()
+            self.all_resized_icons = {
+                (device, ICON_SIZE): icon for device, icon in self.resized_icons.items()
+            }
             try:
                 logger.info("Setting up E-paper display class")
                 self.epd = epd4in2_V2.EPD()
@@ -526,6 +527,21 @@ if is_raspberry_pi():
         ):
             prev_measured_power_array = np.zeros(curr_time_pos + 1 - notnan_pos)
             prev_predicted_power_array = np.zeros(len(x_pixels) - curr_time_pos - 1)
+            # TODO: initialize prev line with zero line
+            prev_measured_points = self.power_array_to_points(
+                np.zeros(len(prev_measured_power_array)),
+                min_power,
+                max_power,
+                plot_height,
+                x_pixels[notnan_pos : curr_time_pos + 1],
+            )
+            prev_predicted_points = self.power_array_to_points(
+                np.zeros(len(prev_predicted_power_array)),
+                min_power,
+                max_power,
+                plot_height,
+                x_pixels[curr_time_pos + 1 :],
+            )
             for device in self.devices:
                 if not isinstance(device, SocketDevice):
                     continue
@@ -575,6 +591,38 @@ if is_raspberry_pi():
                     x_pixels[curr_time_pos + 1 :],
                 )
                 draw.line(predicted_power_points, fill=self.epd.GRAY2, width=1)
+                # TODO: Tile the space brtween the previous and current line
+                positions_and_sizes_predicted_power = calculate_icon_positions(
+                    predicted_power_points, prev_predicted_points, init_icon_size=32
+                )
+                positions_and_sizes_measured_power = calculate_icon_positions(
+                    measured_power_points, prev_measured_points, init_icon_size=32
+                )
+                self.tile_graph_with_icons(
+                    device, positions_and_sizes_predicted_power, draw
+                )
+                self.tile_graph_with_icons(
+                    device, positions_and_sizes_measured_power, draw
+                )
+                # Update prev lines with the predicted and measured points
+                prev_measured_points = measured_power_points
+                prev_predicted_points = predicted_power_points
+
+        def tile_graph_with_icons(
+            self,
+            device: SocketDevice | Battery,
+            positions_and_sizes: list[tuple[int, int, int]],
+            draw: ImageDraw.ImageDraw,
+        ):
+            for x, y, icon_size in positions_and_sizes:
+                if (device, icon_size) in self.all_resized_icons:
+                    icon = self.all_resized_icons[(device, icon_size)]
+                else:
+                    icon = self.resized_icons[device].resize(
+                        (icon_size, icon_size), Image.Resampling.LANCZOS
+                    )
+                    self.all_resized_icons[(device, icon_size)] = icon
+                draw.bitmap((int(x), int(y)), icon, fill=None)
 
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
@@ -653,3 +701,60 @@ if is_raspberry_pi():
                 logger.info("Clear and sleep E-paper display cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise
+
+
+def calculate_icon_positions(
+    pixel_points_upper: list[tuple[int, int]],
+    pixel_points_lower: list[tuple[int, int]],
+    init_icon_size: int = ICON_SIZE,
+) -> list[tuple[int, int, int]]:
+    if len(pixel_points_upper) != len(pixel_points_lower):
+        error_msg = (
+            "The upper and lower power points lists should have the same length. "
+            f"Got {len(pixel_points_upper)} and {len(pixel_points_lower)}"
+        )
+        raise ValueError(error_msg)
+    # TODO: Properly take into account that power can sometimes be negative,
+    # and thus flip the upper and lower points.
+    # Find the maximum length of an icon possible based on width
+    max_icon_size = min(
+        init_icon_size, pixel_points_upper[-1][0] - pixel_points_upper[0][0]
+    )
+    min_icon_size = 8  # Minimum size to still be recognizable
+    icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
+    pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
+    icon_positions_and_sizes = []
+    y_pixels_upper = [point[1] for point in pixel_points_upper]
+    y_pixels_lower = [point[1] for point in pixel_points_lower]
+    skip_ranges = []
+    for icon_size in icon_sizes:
+        # TODO: While looping through icon sizes from max to min:
+        icon_indices = math.ceil(icon_size / pixels_width_per_index)
+        start_window_index = 0
+        end_window_index = icon_indices
+        while end_window_index < len(pixel_points_upper):
+            if any(s <= start_window_index < e for s, e in skip_ranges):
+                start_window_index += 1
+                end_window_index += 1
+                continue
+            upper_window = y_pixels_upper[start_window_index:end_window_index]
+            lower_window = y_pixels_lower[start_window_index:end_window_index]
+            # Calculate difference between
+            # upper points (that have smaller values) and lower points (larger values)
+            lowest_y_upper = max(upper_window)
+            highest_y_lower = min(lower_window)
+            if abs(lowest_y_upper - highest_y_lower) < icon_size:
+                start_window_index += 1
+                end_window_index += 1
+                continue
+            # Icon fits here,
+            # so save the position and size and continue 1 pixel size later
+            x_pos = pixel_points_upper[start_window_index][0]
+            y_pos = lowest_y_upper
+            icon_positions_and_sizes.append((x_pos, y_pos, icon_size))
+            skip_ranges.append((start_window_index, end_window_index))
+            start_window_index += icon_indices
+            end_window_index += icon_indices
+        # If this icon size cannot fit anywhere anymore,
+        # continue with the next smaller icon size.
+    return icon_positions_and_sizes
