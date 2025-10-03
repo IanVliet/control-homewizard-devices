@@ -527,7 +527,7 @@ if is_raspberry_pi():
         ):
             prev_measured_power_array = np.zeros(curr_time_pos + 1 - notnan_pos)
             prev_predicted_power_array = np.zeros(len(x_pixels) - curr_time_pos - 1)
-            # TODO: initialize prev line with zero line
+            # initialize prev line with zero line
             prev_measured_points = self.power_array_to_points(
                 np.zeros(len(prev_measured_power_array)),
                 min_power,
@@ -544,6 +544,10 @@ if is_raspberry_pi():
             )
             for device in self.devices:
                 if not isinstance(device, SocketDevice):
+                    # Note: The situation is more complex when considering batteries.
+                    # Since these can provide power as well as consume power.
+                    # A possible solution would be to track negative and
+                    # positive power seperately
                     continue
                 power_array = df_timeline[
                     TimelineColNames.measured_power_consumption(device)
@@ -557,6 +561,7 @@ if is_raspberry_pi():
                     self.logger.error(error_msg)
                     raise ValueError(error_msg)
 
+                # TODO: Ensure measured power is positive when a device consumes power.
                 sliced_measured_power_array = power_array[
                     notnan_pos : curr_time_pos + 1
                 ]
@@ -591,7 +596,7 @@ if is_raspberry_pi():
                     x_pixels[curr_time_pos + 1 :],
                 )
                 draw.line(predicted_power_points, fill=self.epd.GRAY2, width=1)
-                # TODO: Tile the space brtween the previous and current line
+                # Tile the space between the previous and current line
                 positions_and_sizes_predicted_power = calculate_icon_positions(
                     predicted_power_points, prev_predicted_points, init_icon_size=32
                 )
@@ -610,7 +615,7 @@ if is_raspberry_pi():
 
         def tile_graph_with_icons(
             self,
-            device: SocketDevice | Battery,
+            device: SocketDevice,
             positions_and_sizes: list[tuple[int, int, int]],
             draw: ImageDraw.ImageDraw,
         ):
@@ -724,13 +729,14 @@ def calculate_icon_positions(
     )
     min_icon_size = 8  # Minimum size to still be recognizable
     icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
+    # TODO: Consider what should happen when no icons fit
+    # even when there is still a (significant) difference between upper and lower
     pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
     icon_positions_and_sizes = []
     y_pixels_upper = [point[1] for point in pixel_points_upper]
     y_pixels_lower = [point[1] for point in pixel_points_lower]
     skip_ranges = []
     for icon_size in icon_sizes:
-        # TODO: While looping through icon sizes from max to min:
         icon_indices = math.ceil(icon_size / pixels_width_per_index)
         start_window_index = 0
         end_window_index = icon_indices
@@ -745,12 +751,14 @@ def calculate_icon_positions(
             # upper points (that have smaller values) and lower points (larger values)
             lowest_y_upper = max(upper_window)
             highest_y_lower = min(lower_window)
-            if abs(lowest_y_upper - highest_y_lower) < icon_size:
+            if highest_y_lower - lowest_y_upper < icon_size:
+                # Icon does not fit here
+                # (only allow an icon to fit when upper is above lower)
                 start_window_index += 1
                 end_window_index += 1
                 continue
             # Icon fits here,
-            # so save the position and size and continue 1 pixel size later
+            # so save the position and size and continue 1 icon size later
             x_pos = pixel_points_upper[start_window_index][0]
             y_pos = lowest_y_upper
             icon_positions_and_sizes.append((x_pos, y_pos, icon_size))
@@ -758,5 +766,5 @@ def calculate_icon_positions(
             start_window_index += icon_indices
             end_window_index += icon_indices
         # If this icon size cannot fit anywhere anymore,
-        # continue with the next smaller icon size.
+        # attempt the next smaller icon size.
     return icon_positions_and_sizes
