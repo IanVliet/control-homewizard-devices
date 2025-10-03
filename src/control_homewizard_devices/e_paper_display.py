@@ -445,7 +445,7 @@ if is_raspberry_pi():
             # Normalized to 0-1
             normalized_power = (power_array - min_power) / (max_power - min_power)
             y_pixels = (1 - normalized_power) * (plot_height - 1)
-            points = list(zip(x_pixels, y_pixels, strict=False))
+            points = list(zip(x_pixels, y_pixels, strict=True))
             return points
 
         def power_value_to_y_pixel(
@@ -714,11 +714,13 @@ def calculate_icon_positions(
             f"Got {len(pixel_points_upper)} and {len(pixel_points_lower)}"
         )
         raise ValueError(error_msg)
+    if len(pixel_points_upper) <= 2:
+        return []
     # TODO: Properly take into account that power can sometimes be negative,
     # and thus flip the upper and lower points.
     # Find the maximum length of an icon possible based on width
     max_icon_size = min(
-        init_icon_size, pixel_points_upper[-1][0] - pixel_points_upper[0][0]
+        init_icon_size, int(pixel_points_upper[-1][0] - pixel_points_upper[0][0])
     )
     min_icon_size = 8  # Minimum size to still be recognizable
     icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
