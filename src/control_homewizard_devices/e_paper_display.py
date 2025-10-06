@@ -399,6 +399,28 @@ if is_raspberry_pi():
         def calculate_min_max_power(self, df_timeline: pd.DataFrame):
             predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
             measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
+            sum_predicted_devices = (
+                df_timeline[
+                    [
+                        TimelineColNames.predicted_power_consumption(device)
+                        for device in self.devices
+                        if isinstance(device, SocketDevice)
+                    ]
+                ]
+                .sum(axis=1)
+                .to_numpy()
+            )
+            sum_measured_devices = (
+                df_timeline[
+                    [
+                        TimelineColNames.measured_power_consumption(device)
+                        for device in self.devices
+                        if isinstance(device, SocketDevice)
+                    ]
+                ]
+                .sum(axis=1)
+                .to_numpy()
+            )
             # Get the maximum of the predicted and measured power
             # TODO: In case the scheduled devices are included into the graph -->
             # take the devices into accounting when calculating the min and max
@@ -409,14 +431,25 @@ if is_raspberry_pi():
                 max_measured,
                 max_predicted,
             )
+            max_measured_devices = np.nanmax(sum_measured_devices, initial=0)
+            max_predicted_devices = np.nanmax(sum_predicted_devices, initial=0)
+            self.logger.debug(
+                "Max sum of power of measured devices: %s, "
+                "Max sum of power of predicted devices: %s",
+                max_measured_devices,
+                max_predicted_devices,
+            )
             max_stacked_power = np.array(
                 [
                     max_predicted,
                     max_measured,
+                    max_measured_devices,
+                    max_predicted_devices,
                     0,
                 ]
             )  # Ensure max power is atleast 0
             max_power = np.nanmax(max_stacked_power)
+
             min_measured = np.nanmin(measured_power, initial=0)
             min_predicted = np.nanmin(predicted_power, initial=0)
             self.logger.debug(
@@ -424,10 +457,20 @@ if is_raspberry_pi():
                 min_measured,
                 min_predicted,
             )
+            min_measured_devices = np.nanmax(sum_measured_devices, initial=0)
+            min_predicted_devices = np.nanmin(sum_predicted_devices, initial=0)
+            self.logger.debug(
+                "Min sum of power of measured devices: %s, "
+                "Min sum of power of predicted devices: %s",
+                min_measured_devices,
+                min_predicted_devices,
+            )
             min_stacked_power = np.array(
                 [
                     min_predicted,
                     min_measured,
+                    min_measured_devices,
+                    min_predicted_devices,
                     0,
                 ]
             )  # Ensure min power is atleast 0
