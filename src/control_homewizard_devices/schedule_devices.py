@@ -6,7 +6,7 @@ from control_homewizard_devices.device_classes import (
     AggregateBattery,
 )
 from control_homewizard_devices.utils import ColNames
-from typing import Any
+from typing import Any, cast
 
 
 class ScheduleData:
@@ -74,7 +74,9 @@ class Variables:
         """
         Create my_variables for each device and time step.
         """
-        self.df_variables = pd.DataFrame(index=data.df_power_interpolated.index)
+        self.df_variables = pd.DataFrame(
+            index=data.df_power_interpolated.index, dtype=float
+        )
         for device in data.devices_list:
             # in schedule: a device with -1 provides power (e.g. a battery discharging),
             # 0 a device does nothing, 1 a device consumes power
@@ -150,6 +152,16 @@ class DeviceSchedulingOptimization:
             # Schedule if there is enough available power
             device_full = self.schedule_device_available_power(device, charge_duration)
 
+        # TODO: In case devices are not scheduled, because they are full
+        # But there is still enough power for certain devices to be charged
+        # Schedule the devices anyway to ensure that the most amount of power is used
+        # Note: If a device turns on while full,
+        # it is likely that the device has emptied slightly.
+        # This is detected and the device is again charged until full.
+        # (Might have to take into account that needed devices being detected empty
+        # at the last moment of enough power,
+        # would cause them to demand power until full again.)
+
         # Charge the aggregate battery at the end of the schedule.
         if len(self.data.battery_list) > 0:
             self.charge_batteries_remaining()
@@ -216,8 +228,11 @@ class DeviceSchedulingOptimization:
                 needed_power = device.max_power_usage - available_power[t_e]
                 energy_stored = temp_df_variables.iat[
                     t_e - 1,
-                    temp_df_variables.columns.get_loc(
-                        ColNames.energy_stored(self.data.aggregate_battery)
+                    cast(
+                        int,
+                        temp_df_variables.columns.get_loc(
+                            ColNames.energy_stored(self.data.aggregate_battery)
+                        ),
                     ),
                 ]
                 # If batteries cannot provide enough power
@@ -226,10 +241,18 @@ class DeviceSchedulingOptimization:
                 if (
                     needed_power * self.delta_t > energy_stored
                     or needed_power > self.data.aggregate_battery.max_power_usage
-                    or temp_df_variables.iat[
-                        t_e,
-                        temp_df_variables.columns.get_loc(ColNames.state(device)),
-                    ]
+                    or cast(
+                        float,
+                        temp_df_variables.iat[
+                            t_e,
+                            cast(
+                                int,
+                                temp_df_variables.columns.get_loc(
+                                    ColNames.state(device)
+                                ),
+                            ),
+                        ],
+                    )
                     > 0
                 ):
                     if available_power[t_e] < 0:
@@ -273,18 +296,28 @@ class DeviceSchedulingOptimization:
         return max_charging_timesteps >= charge_duration
 
     def charge_batteries_at_timestep(self, timestep: int, df_schedule: pd.DataFrame):
-        available_power = df_schedule.iat[
-            timestep, df_schedule.columns.get_loc(ColNames.AVAILABLE_POWER)
-        ]
+        available_power: float = cast(
+            float,
+            df_schedule.iat[
+                timestep,
+                cast(int, df_schedule.columns.get_loc(ColNames.AVAILABLE_POWER)),
+            ],
+        )
         if available_power <= 0:
             return
         if timestep > 0:
-            start_energy: float = df_schedule.iat[
-                timestep - 1,
-                df_schedule.columns.get_loc(
-                    ColNames.energy_stored(self.data.aggregate_battery)
-                ),
-            ]
+            start_energy: float = cast(
+                float,
+                df_schedule.iat[
+                    timestep - 1,
+                    cast(
+                        int,
+                        df_schedule.columns.get_loc(
+                            ColNames.energy_stored(self.data.aggregate_battery)
+                        ),
+                    ),
+                ],
+            )
         else:
             start_energy = self.data.aggregate_battery.energy_stored
         max_power = (
@@ -308,13 +341,16 @@ class DeviceSchedulingOptimization:
     def discharge_batteries_at_timestep(
         self, needed_power: float, timestep: int, df_schedule: pd.DataFrame
     ):
-        energy_stored = df_schedule.at[
-            df_schedule.index[timestep - 1],
-            ColNames.energy_stored(self.data.aggregate_battery),
-        ]
-        available_power = df_schedule.at[
-            df_schedule.index[timestep], ColNames.AVAILABLE_POWER
-        ]
+        energy_stored = cast(
+            float,
+            df_schedule.at[
+                df_schedule.index[timestep - 1],
+                ColNames.energy_stored(self.data.aggregate_battery),
+            ],
+        )
+        available_power = cast(
+            float, df_schedule.at[df_schedule.index[timestep], ColNames.AVAILABLE_POWER]
+        )
 
         possible_power = energy_stored / self.delta_t
         discharge_power = min(
@@ -338,13 +374,16 @@ class DeviceSchedulingOptimization:
     def schedule_device(
         self, timestep: int, device: SocketDevice, df_schedule: pd.DataFrame
     ):
-        energy_stored = df_schedule.at[
-            df_schedule.index[timestep - 1],
-            ColNames.energy_stored(device),
-        ]
-        available_power = df_schedule.at[
-            df_schedule.index[timestep], ColNames.AVAILABLE_POWER
-        ]
+        energy_stored = cast(
+            float,
+            df_schedule.at[
+                df_schedule.index[timestep - 1],
+                ColNames.energy_stored(device),
+            ],
+        )
+        available_power = cast(
+            float, df_schedule.at[df_schedule.index[timestep], ColNames.AVAILABLE_POWER]
+        )
         columns = [
             ColNames.state(device),
             ColNames.energy_stored(device),
