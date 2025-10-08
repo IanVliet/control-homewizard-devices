@@ -679,10 +679,6 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Attempting full update")
                 epd = self.epd
-                epd.init()
-                # TODO: Test/Consider whether clear is needed.
-                epd.Clear()
-                epd.Init_4Gray()
                 font = self.font
                 L_image = Image.new("L", (epd.width, epd.height), 255)
                 draw = ImageDraw.Draw(L_image)
@@ -722,6 +718,10 @@ if is_raspberry_pi():
                             df_timeline, curr_timeindex
                         )
                         L_image.paste(plot_image, (0, self.height_all_icons))
+                # epd.init()
+                # TODO: Test/Consider whether clear is needed.
+                # epd.Clear()
+                epd.Init_4Gray()
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()
