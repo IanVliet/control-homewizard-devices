@@ -391,7 +391,7 @@ if is_raspberry_pi():
                 0,
             )
             plot_draw.line(
-                [(max_y_label_w - 1, y_pos_upper), (max_y_label_w + 1, y_pos_upper)],
+                [(max_y_label_w - 2, y_pos_upper), (max_y_label_w, y_pos_upper)],
                 fill=epd.GRAY4,
             )
             plot_draw.text(
@@ -411,7 +411,7 @@ if is_raspberry_pi():
                 plot_height,
             )
             plot_draw.line(
-                [(max_y_label_w - 1, y_pos_lower), (max_y_label_w + 1, y_pos_lower)],
+                [(max_y_label_w - 2, y_pos_lower), (max_y_label_w, y_pos_lower)],
                 fill=epd.GRAY4,
             )
             plot_draw.text(
