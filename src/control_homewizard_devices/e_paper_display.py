@@ -69,22 +69,12 @@ if is_raspberry_pi():
                 resized_icons[device] = resized
             return resized_icons
 
-        def _get_text_width_and_height(
-            self, text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont
-        ):
-            text_bbox = font.getbbox(text)
-            text_w = math.ceil(text_bbox[2] - text_bbox[0])
-            text_h = math.ceil(text_bbox[3] - text_bbox[1])
-            return text_w, text_h
-
         def grid_positions(self):
             self.logger.info(
                 "Calculating positions for cells containing charge percentages "
                 "and icons"
             )
-            max_text_width, text_height = self._get_text_width_and_height(
-                "100%", self.font
-            )
+            max_text_width, text_height = get_text_width_and_height("100%", self.font)
             # calculate grid for icon + text
             cell_width = max_text_width + ICON_SIZE
             cell_height = max(ICON_SIZE, text_height)
@@ -141,9 +131,7 @@ if is_raspberry_pi():
 
             # Draw label power for y-axis
             y_label_text = "power [kW]"
-            y_label_w, y_label_h = self._get_text_width_and_height(
-                y_label_text, self.font
-            )
+            y_label_w, y_label_h = get_text_width_and_height(y_label_text, self.font)
             y_label_image = Image.new("L", (y_label_w, y_label_h), epd.GRAY1)
             y_label_draw = ImageDraw.Draw(y_label_image)
             y_label_draw.text((0, 0), y_label_text, fill=epd.GRAY4)
@@ -156,25 +144,23 @@ if is_raspberry_pi():
 
             # Calculate position x position and space needed for x-axis label
             x_label_text = "Time"
-            x_label_w, x_label_h = self._get_text_width_and_height(
-                x_label_text, self.font
-            )
+            x_label_w, x_label_h = get_text_width_and_height(x_label_text, self.font)
             # Determine the ticks and labels for the x-axis
             hour_format = "%H:%M"
             start_time_tick = df_timeline.index[0]
             end_time_tick = df_timeline.index[-1]
             formatted_start_time = start_time_tick.strftime(hour_format)
-            start_time_w, start_time_h = self._get_text_width_and_height(
+            start_time_w, start_time_h = get_text_width_and_height(
                 formatted_start_time, self.font
             )
             formatted_end_time = end_time_tick.strftime(hour_format)
-            end_time_w, end_time_h = self._get_text_width_and_height(
+            end_time_w, end_time_h = get_text_width_and_height(
                 formatted_end_time, self.font
             )
 
             self.logger.debug("Formating current time label")
             formatted_current_time = curr_timeindex.strftime(hour_format)
-            curr_time_label_w, curr_time_label_h = self._get_text_width_and_height(
+            curr_time_label_w, curr_time_label_h = get_text_width_and_height(
                 formatted_current_time, self.font
             )
             # Calculate max height needed for different x-axis ticks and labels
@@ -200,10 +186,10 @@ if is_raspberry_pi():
                 formatted_upper_tick_y,
             )
             formatted_lower_tick_y_w, formatted_lower_tick_y_h = (
-                self._get_text_width_and_height(formatted_lower_tick_y, self.font)
+                get_text_width_and_height(formatted_lower_tick_y, self.font)
             )
             formatted_upper_tick_y_w, formatted_upper_tick_y_h = (
-                self._get_text_width_and_height(formatted_upper_tick_y, self.font)
+                get_text_width_and_height(formatted_upper_tick_y, self.font)
             )
 
             # Calculate max width needed for y-axis
@@ -348,34 +334,34 @@ if is_raspberry_pi():
             plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
             # Draw the start and end tick on the x-axis.
             # Only in case they do not overlap with the current tick.
-            if x_pos_current_time > max_y_label_w + math.ceil(start_time_w / 2):
-                start_time_x = x_pixels[0] + max_y_label_w
+            start_time_x = x_pixels[0] + max_y_label_w
+            x_pos_start_time = start_time_x - start_time_w // 2
+            max_x_pos_start_time = max(0, x_pos_start_time)
+            if x_pos_current_time > max_x_pos_start_time + start_time_w:
                 self.logger.debug("Drawing start time tick")
                 plot_draw.line(
                     [(start_time_x, plot_height - 1), (start_time_x, plot_height + 1)],
                     fill=epd.GRAY4,
                 )
-                x_pos_start_time = start_time_x - start_time_w // 2
-                x_pos_x_start_time = max(max_y_label_w - start_time_w, x_pos_start_time)
                 plot_draw.text(
-                    (x_pos_x_start_time, y_pos_x_label),
+                    (max_x_pos_start_time, y_pos_x_label),
                     formatted_start_time,
                     fill=epd.GRAY4,
                 )
-            if x_pos_current_time < canvas_width - end_time_w:
+            end_time_x = x_pixels[-1] + max_y_label_w
+            x_pos_end_time = end_time_x - end_time_w // 2
+            min_x_pos_end_tick = min(canvas_width - end_time_w, x_pos_end_time)
+            if x_pos_current_time < min_x_pos_end_tick:
                 # TODO: Ensure the tick does not fall off the display.
                 # Draw a small line at the exact position
                 # Draw the text as close as possible without falling off the display
-                end_time_x = x_pixels[-1] + max_y_label_w
                 self.logger.debug("Drawing end time tick")
                 plot_draw.line(
                     [(end_time_x, plot_height - 1), (end_time_x, plot_height + 1)],
                     fill=epd.GRAY4,
                 )
-                x_pos_end_time = end_time_x - end_time_w // 2
-                x_pos_x_end_tick = min(canvas_width - end_time_w, x_pos_end_time)
                 plot_draw.text(
-                    (x_pos_x_end_tick, y_pos_x_label),
+                    (min_x_pos_end_tick, y_pos_x_label),
                     formatted_end_time,
                     fill=epd.GRAY4,
                 )
@@ -721,7 +707,7 @@ if is_raspberry_pi():
                         device.energy_stored / device.energy_capacity * 100
                     )
                     text = f"{percentage}%"
-                    text_w, text_h = self._get_text_width_and_height(text, self.font)
+                    text_w, text_h = get_text_width_and_height(text, self.font)
                     text_x = x + math.ceil((self.max_text_width - text_w) / 2)
                     text_y = y + math.ceil((self.cell_height - text_h) / 2)
                     draw.text((text_x, text_y), text, font=font, fill=0)
@@ -779,6 +765,17 @@ if is_raspberry_pi():
                 logger.info("Clear and sleep E-paper display cancelled")
                 epd4in2_V2.epdconfig.module_exit(cleanup=True)
                 raise
+
+
+def get_text_width_and_height(
+    text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+):
+    # TODO: Ensure width is properly calculated,
+    # Or atleast that the ticks are properly placed.
+    text_bbox = font.getbbox(text)
+    text_w = math.ceil(text_bbox[2] - text_bbox[0])
+    text_h = math.ceil(text_bbox[3] - text_bbox[1])
+    return text_w, text_h
 
 
 def calculate_icon_positions(
