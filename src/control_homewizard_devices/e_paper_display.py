@@ -5,7 +5,6 @@ from PIL import Image, ImageDraw, ImageFont
 import logging
 import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
-from control_homewizard_devices.schedule_devices import ColNames
 from control_homewizard_devices.utils import is_raspberry_pi, TimelineColNames
 from control_homewizard_devices.constants import ICON_SIZE, FONT_SIZE
 import pandas as pd
@@ -141,8 +140,7 @@ if is_raspberry_pi():
             plot_draw = ImageDraw.Draw(plot_image)
 
             # Draw label power for y-axis
-            # TODO: Draw label in kw.
-            y_label_text = ColNames.POWER_W
+            y_label_text = "power [kW]"
             y_label_w, y_label_h = self._get_text_width_and_height(
                 y_label_text, self.font
             )
@@ -269,8 +267,6 @@ if is_raspberry_pi():
                     )
                     data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
                     self.logger.debug("Drawing scheduled devices")
-                    # TODO: Draw rectangles or something for the scheduled devices.
-                    # TODO: Try an icon of each device under the line.
                     # TODO: Consider what to do when the icon does not fit
                     self.draw_device_schedule(
                         data_draw,
@@ -353,15 +349,33 @@ if is_raspberry_pi():
             # Draw the start and end tick on the x-axis.
             # Only in case they do not overlap with the current tick.
             if x_pos_current_time > max_y_label_w + math.ceil(start_time_w / 2):
+                start_time_x = x_pixels[0] + max_y_label_w
+                self.logger.debug("Drawing start time tick")
+                plot_draw.line(
+                    [(start_time_x, plot_height - 1), (start_time_x, plot_height + 1)],
+                    fill=epd.GRAY4,
+                )
+                x_pos_start_time = start_time_x - start_time_w // 2
+                x_pos_x_start_time = max(max_y_label_w - start_time_w, x_pos_start_time)
                 plot_draw.text(
-                    (max_y_label_w - start_time_w // 2, y_pos_x_label),
+                    (x_pos_x_start_time, y_pos_x_label),
                     formatted_start_time,
                     fill=epd.GRAY4,
                 )
             if x_pos_current_time < canvas_width - end_time_w:
                 # TODO: Ensure the tick does not fall off the display.
+                # Draw a small line at the exact position
+                # Draw the text as close as possible without falling off the display
+                end_time_x = x_pixels[-1] + max_y_label_w
+                self.logger.debug("Drawing end time tick")
+                plot_draw.line(
+                    [(end_time_x, plot_height - 1), (end_time_x, plot_height + 1)],
+                    fill=epd.GRAY4,
+                )
+                x_pos_end_time = end_time_x - end_time_w // 2
+                x_pos_x_end_tick = min(canvas_width - end_time_w, x_pos_end_time)
                 plot_draw.text(
-                    (canvas_width - end_time_w // 2, y_pos_x_label),
+                    (x_pos_x_end_tick, y_pos_x_label),
                     formatted_end_time,
                     fill=epd.GRAY4,
                 )
@@ -369,25 +383,41 @@ if is_raspberry_pi():
             # TODO: Group relevant codes together into logical positions and functions
             # TODO: Ensure the ticks are drawn if they do not overlap with zero label.
             # Draw the max tick on the y-axis
+            y_pos_upper = self.power_value_to_y_pixel(
+                upper_tick_y, min_power, max_power, plot_height
+            )
+            max_y_pos_y_upper_tick = max(
+                y_pos_upper - formatted_upper_tick_y_h // 2,
+                0,
+            )
+            plot_draw.line(
+                [(max_y_label_w - 1, y_pos_upper), (max_y_label_w + 1, y_pos_upper)],
+                fill=epd.GRAY4,
+            )
             plot_draw.text(
                 (
                     0,
-                    self.power_value_to_y_pixel(
-                        upper_tick_y, min_power, max_power, plot_height
-                    )
-                    - formatted_upper_tick_y_h // 2,
+                    max_y_pos_y_upper_tick,
                 ),
                 formatted_upper_tick_y,
                 fill=epd.GRAY4,
             )
             # Draw the min tick on the y-axis
+            y_pos_lower = self.power_value_to_y_pixel(
+                lower_tick_y, min_power, max_power, plot_height
+            )
+            min_y_pos_y_lower_tick = min(
+                y_pos_lower - formatted_lower_tick_y_h // 2,
+                plot_height,
+            )
+            plot_draw.line(
+                [(max_y_label_w - 1, y_pos_lower), (max_y_label_w + 1, y_pos_lower)],
+                fill=epd.GRAY4,
+            )
             plot_draw.text(
                 (
                     0,
-                    self.power_value_to_y_pixel(
-                        lower_tick_y, min_power, max_power, plot_height
-                    )
-                    - formatted_lower_tick_y_h // 2,
+                    min_y_pos_y_lower_tick,
                 ),
                 formatted_lower_tick_y,
                 fill=epd.GRAY4,
