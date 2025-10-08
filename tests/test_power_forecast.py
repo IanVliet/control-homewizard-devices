@@ -733,3 +733,35 @@ def test_battery_discharge_with_socket(power_1kw_neg_1_5kw_pos_2kw, request):
             1,
         ]
     )
+
+
+# Create test where the socket is on even after the device is full
+# Only if enough power is available anyways.
+# This should only happen with the overcharge option set to True
+def test_socket_on_overcharge(power_1kw, request):
+    """
+    If enough power is available, turn socket on,
+    even if device is already fully charged
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice(
+            "", "HWE-SKT", "test socket", 1000, 500, 1, True, delta_t=DELTA_T_TEST
+        ),
+    ]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_1kw, devices_list, overcharge=True
+    )
+    if request.config.getoption("--debug-scheduler"):
+        print_schedule_results(data, results)
+    df_schedules = results[-1].df_variables
+    assert df_schedules[
+        f"schedule {devices_list[0].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            1,
+            1,
+            1,
+            1,
+        ]
+    )

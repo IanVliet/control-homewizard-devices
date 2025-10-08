@@ -26,6 +26,7 @@ class ScheduleData:
             for device in socket_and_battery_list
             if isinstance(device, SocketDevice)
         ]
+        self.socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
         self.battery_list = [
             device for device in socket_and_battery_list if isinstance(device, Battery)
         ]
@@ -37,11 +38,9 @@ class ScheduleData:
         self.needed_socket_list = [
             device for device in self.socket_list if device.daily_need
         ]
-        self.needed_socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
         self.optional_socket_list = [
             device for device in self.socket_list if not device.daily_need
         ]
-        self.optional_socket_list.sort(key=lambda d: (d.priority, -d.max_power_usage))
 
     def preprocess_power_data(self, df_power: pd.DataFrame):
         """
@@ -103,6 +102,7 @@ class DeviceSchedulingOptimization:
         self,
         df_power: pd.DataFrame,
         socket_and_battery_list: list[SocketDevice | Battery],
+        overcharge: bool = False,
     ) -> tuple[ScheduleData, list[Variables]]:
         """
         Solve the scheduling problem for devices that need to be charged.
@@ -152,15 +152,19 @@ class DeviceSchedulingOptimization:
             # Schedule if there is enough available power
             device_full = self.schedule_device_available_power(device, charge_duration)
 
-        # TODO: In case devices are not scheduled, because they are full
-        # But there is still enough power for certain devices to be charged
-        # Schedule the devices anyway to ensure that the most amount of power is used
-        # Note: If a device turns on while full,
-        # it is likely that the device has emptied slightly.
-        # This is detected and the device is again charged until full.
-        # (Might have to take into account that needed devices being detected empty
-        # at the last moment of enough power,
-        # would cause them to demand power until full again.)
+        if overcharge:
+            # Schedule devices as long as there is enough power available
+            # Note: If a device consumes power while the program thinks it is full,
+            # it is likely that the device has emptied slightly.
+            # This can then be detected and allow the device to be charged until full.
+            # Be aware that needed devices being detected empty
+            # late into the day would cause them to demand power until full again.
+
+            # To ensure each device is charged as much as possible
+            # charge duration is set to the length of the dataframe
+            max_duration = len(self.variables.df_variables.index)
+            for device in self.data.socket_list:
+                self.schedule_device_available_power(device, max_duration)
 
         # Charge the aggregate battery at the end of the schedule.
         if len(self.data.battery_list) > 0:
