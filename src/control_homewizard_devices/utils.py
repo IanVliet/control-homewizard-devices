@@ -85,13 +85,26 @@ class ZonedTime:
         )
         return self.at_date(next_date)
 
+    def at_previous_date(self, d: date) -> datetime:
+        """
+        Returns a datetime object for the previous occurrence of this ZonedTime
+        before the given date.
+        If the time has not yet passed today, it will return the time for yesterday.
+        """
+        prev_date = (
+            d - timedelta(days=1) if self.at_date(d) > datetime.now(self.tz) else d
+        )
+        return self.at_date(prev_date)
+
     def get_naive_utc_date(self) -> datetime:
         """
-        Returns a naive datetime object (in UTC) for today's date
+        Returns a naive datetime object (in UTC)
         with the time based on the hour and minute of this ZonedTime.
+        The date is today if the ZonedTime has already passed today,
+        and yesterday if the ZonedTime has not yet passed.
         """
         today = datetime.now(self.tz).date()
-        local_dt = self.at_date(today)
+        local_dt = self.at_previous_date(today)
         # Convert to UTC and make naive
         utc_dt = local_dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
         return utc_dt
