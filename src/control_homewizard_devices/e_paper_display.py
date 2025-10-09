@@ -25,6 +25,11 @@ icons_dir = os.path.join(REPO_ROOT, "icons")
 
 if os.path.exists(waveshare_lib) and waveshare_lib not in sys.path:
     sys.path.append(waveshare_lib)
+
+FONTS_DIR = os.path.join(REPO_ROOT, "fonts")
+os.makedirs(FONTS_DIR, exist_ok=True)
+font_path = os.path.join(FONTS_DIR, "Roboto-Regular.ttf")
+
 if is_raspberry_pi():
     from waveshare_epd import epd4in2_V2  # noqa: E402
 
@@ -44,8 +49,8 @@ if is_raspberry_pi():
                 logger.info("Init and clear E-paper display")
                 self.epd.init()
                 self.epd.Clear()
-                self.font_large = ImageFont.load_default(size=FONT_SIZE_LARGE)
-                self.font_small = ImageFont.load_default(size=FONT_SIZE_SMALL)
+                self.font_large = ImageFont.truetype(font_path, size=FONT_SIZE_LARGE)
+                self.font_small = ImageFont.truetype(font_path, size=FONT_SIZE_SMALL)
                 (
                     self.positions,
                     cols,
@@ -180,11 +185,16 @@ if is_raspberry_pi():
             )
             # Calculate max height needed for different x-axis ticks and labels
             # TODO: Take the lower tick of the y-axis into account.
+            # TODO: Add spacing between x-axis and labels
+            ascent, descent = self.font_small.getmetrics()
+            max_height_small = ascent - descent
+
             max_x_label_h = max(
                 x_label_h,
                 start_time_h,
                 end_time_h,
                 curr_time_label_h,
+                max_height_small,
             )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
             self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
@@ -208,6 +218,7 @@ if is_raspberry_pi():
             )
 
             # Calculate max width needed for y-axis
+            # TODO: Add spacing between y-axis and labels
             max_y_label_w = max(
                 y_label_h,
                 math.ceil(start_time_w / 2),
@@ -298,7 +309,7 @@ if is_raspberry_pi():
                 plot_draw.text(
                     (
                         x_pos_current_time,
-                        canvas_height - max_x_label_h,
+                        plot_height,
                     ),
                     formatted_current_time,
                     fill=epd.GRAY4,
@@ -322,9 +333,9 @@ if is_raspberry_pi():
             )
             zero_left_point = (max_y_label_w, zero_height)
             zero_right_point = (canvas_width, zero_height)
-
             # Draw the line where the power is 0 (y=0)
             plot_draw.line((zero_left_point, zero_right_point), fill=epd.GRAY4)
+
             # Draw the y-axis line
             plot_draw.line(
                 (top_left_point, (max_y_label_w, plot_height - 1)),
@@ -337,7 +348,6 @@ if is_raspberry_pi():
             )
             # Draw label time for x-axis
             x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
-            y_pos_x_label = canvas_height - max_x_label_h
             try:
                 x_pos_x_label = self.get_position_label_avoid_overlap(
                     x_pos_current_time, curr_time_label_w, x_label_w, canvas_width
@@ -348,7 +358,7 @@ if is_raspberry_pi():
                     "so no overlap between tick for current time and x-label possible"
                 )
             plot_draw.text(
-                (x_pos_x_label, y_pos_x_label),
+                (x_pos_x_label, plot_height),
                 x_label_text,
                 fill=epd.GRAY4,
                 font=self.font_small,
@@ -365,7 +375,7 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
                 plot_draw.text(
-                    (max_x_pos_start_time, y_pos_x_label),
+                    (max_x_pos_start_time, plot_height),
                     formatted_start_time,
                     fill=epd.GRAY4,
                     font=self.font_small,
@@ -383,7 +393,7 @@ if is_raspberry_pi():
                     fill=epd.GRAY4,
                 )
                 plot_draw.text(
-                    (min_x_pos_end_tick, y_pos_x_label),
+                    (min_x_pos_end_tick, plot_height),
                     formatted_end_time,
                     fill=epd.GRAY4,
                     font=self.font_small,
@@ -564,6 +574,7 @@ if is_raspberry_pi():
             # --> move label to the left
             overlap = diff_tick_end_to_label < 0 and diff_label_end_to_label < 0
             left_sided = diff_tick_end_to_label >= diff_label_end_to_label
+            # TODO: Add spacing between label and tick
             if overlap and left_sided:
                 pos_label = init_label_start_pos - diff_tick_end_to_label
             elif overlap and not left_sided:

@@ -60,3 +60,5 @@ git clone https://github.com/waveshareteam/e-Paper.git
 Create a folder for the icons (e.g. with `mkdir icons`) and ensure that it contains icons in .bmp format for each device with the device name as the filename (`${device_name}.bmp`).
 
 
+# Fonts
+This project includes the Roboto font. See `fonts/OFL.txt` for details.
