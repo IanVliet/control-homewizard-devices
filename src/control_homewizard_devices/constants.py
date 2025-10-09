@@ -13,4 +13,5 @@ AGGREGATE_BATTERY = "aggregate_battery"
 TZ = ZoneInfo("Europe/Amsterdam")
 
 ICON_SIZE = 48
-FONT_SIZE = 16
+FONT_SIZE_LARGE = 16
+FONT_SIZE_SMALL = 11

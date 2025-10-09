@@ -6,7 +6,11 @@ import logging
 import asyncio
 from control_homewizard_devices.device_classes import SocketDevice, Battery
 from control_homewizard_devices.utils import is_raspberry_pi, TimelineColNames
-from control_homewizard_devices.constants import ICON_SIZE, FONT_SIZE
+from control_homewizard_devices.constants import (
+    ICON_SIZE,
+    FONT_SIZE_LARGE,
+    FONT_SIZE_SMALL,
+)
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -40,7 +44,8 @@ if is_raspberry_pi():
                 logger.info("Init and clear E-paper display")
                 self.epd.init()
                 self.epd.Clear()
-                self.font = ImageFont.load_default(size=FONT_SIZE)
+                self.font_large = ImageFont.load_default(size=FONT_SIZE_LARGE)
+                self.font_small = ImageFont.load_default(size=FONT_SIZE_SMALL)
                 (
                     self.positions,
                     cols,
@@ -74,7 +79,9 @@ if is_raspberry_pi():
                 "Calculating positions for cells containing charge percentages "
                 "and icons"
             )
-            max_text_width, text_height = get_text_width_and_height("100%", self.font)
+            max_text_width, text_height = get_text_width_and_height(
+                "100%", self.font_large
+            )
             # calculate grid for icon + text
             cell_width = max_text_width + ICON_SIZE
             cell_height = max(ICON_SIZE, text_height)
@@ -131,7 +138,9 @@ if is_raspberry_pi():
 
             # Draw label power for y-axis
             y_label_text = "power [kW]"
-            y_label_w, y_label_h = get_text_width_and_height(y_label_text, self.font)
+            y_label_w, y_label_h = get_text_width_and_height(
+                y_label_text, self.font_small
+            )
             y_label_image = Image.new("L", (y_label_w, y_label_h), epd.GRAY1)
             y_label_draw = ImageDraw.Draw(y_label_image)
             y_label_draw.text((0, 0), y_label_text, fill=epd.GRAY4)
@@ -142,26 +151,30 @@ if is_raspberry_pi():
             # TODO: Ensure the y-label does not overlap with the ticks.
             plot_image.paste(rotated_y_label, (x_pos_y_label, y_pos_y_label))
 
+            # TODO: Specify the right font (smaller than 16)
+            # TODO: And use it for all written text.
             # Calculate position x position and space needed for x-axis label
             x_label_text = "Time"
-            x_label_w, x_label_h = get_text_width_and_height(x_label_text, self.font)
+            x_label_w, x_label_h = get_text_width_and_height(
+                x_label_text, self.font_small
+            )
             # Determine the ticks and labels for the x-axis
             hour_format = "%H:%M"
             start_time_tick = df_timeline.index[0]
             end_time_tick = df_timeline.index[-1]
             formatted_start_time = start_time_tick.strftime(hour_format)
             start_time_w, start_time_h = get_text_width_and_height(
-                formatted_start_time, self.font
+                formatted_start_time, self.font_small
             )
             formatted_end_time = end_time_tick.strftime(hour_format)
             end_time_w, end_time_h = get_text_width_and_height(
-                formatted_end_time, self.font
+                formatted_end_time, self.font_small
             )
 
             self.logger.debug("Formating current time label")
             formatted_current_time = curr_timeindex.strftime(hour_format)
             curr_time_label_w, curr_time_label_h = get_text_width_and_height(
-                formatted_current_time, self.font
+                formatted_current_time, self.font_small
             )
             # Calculate max height needed for different x-axis ticks and labels
             # TODO: Take the lower tick of the y-axis into account.
@@ -186,10 +199,10 @@ if is_raspberry_pi():
                 formatted_upper_tick_y,
             )
             formatted_lower_tick_y_w, formatted_lower_tick_y_h = (
-                get_text_width_and_height(formatted_lower_tick_y, self.font)
+                get_text_width_and_height(formatted_lower_tick_y, self.font_small)
             )
             formatted_upper_tick_y_w, formatted_upper_tick_y_h = (
-                get_text_width_and_height(formatted_upper_tick_y, self.font)
+                get_text_width_and_height(formatted_upper_tick_y, self.font_small)
             )
 
             # Calculate max width needed for y-axis
@@ -287,6 +300,7 @@ if is_raspberry_pi():
                     ),
                     formatted_current_time,
                     fill=epd.GRAY4,
+                    font=self.font_small,
                 )
 
             # Draw line for predicted power
@@ -347,6 +361,7 @@ if is_raspberry_pi():
                     (max_x_pos_start_time, y_pos_x_label),
                     formatted_start_time,
                     fill=epd.GRAY4,
+                    font=self.font_small,
                 )
             end_time_x = x_pixels[-1] + max_y_label_w
             x_pos_end_time = end_time_x - end_time_w // 2
@@ -364,6 +379,7 @@ if is_raspberry_pi():
                     (min_x_pos_end_tick, y_pos_x_label),
                     formatted_end_time,
                     fill=epd.GRAY4,
+                    font=self.font_small,
                 )
 
             # TODO: Group relevant codes together into logical positions and functions
@@ -387,6 +403,7 @@ if is_raspberry_pi():
                 ),
                 formatted_upper_tick_y,
                 fill=epd.GRAY4,
+                font=self.font_small,
             )
             # Draw the min tick on the y-axis
             y_pos_lower = self.power_value_to_y_pixel(
@@ -407,6 +424,7 @@ if is_raspberry_pi():
                 ),
                 formatted_lower_tick_y,
                 fill=epd.GRAY4,
+                font=self.font_small,
             )
             # Draw tick for 0 line.
 
@@ -695,7 +713,7 @@ if is_raspberry_pi():
                 logger = self.logger
                 logger.info("Attempting full update")
                 epd = self.epd
-                font = self.font
+                font = self.font_large
                 L_image = Image.new("L", (epd.width, epd.height), 255)
                 draw = ImageDraw.Draw(L_image)
 
@@ -707,7 +725,7 @@ if is_raspberry_pi():
                         device.energy_stored / device.energy_capacity * 100
                     )
                     text = f"{percentage}%"
-                    text_w, text_h = get_text_width_and_height(text, self.font)
+                    text_w, text_h = get_text_width_and_height(text, font)
                     text_x = x + math.ceil((self.max_text_width - text_w) / 2)
                     text_y = y + math.ceil((self.cell_height - text_h) / 2)
                     draw.text((text_x, text_y), text, font=font, fill=0)
