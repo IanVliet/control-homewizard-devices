@@ -185,17 +185,17 @@ if is_raspberry_pi():
             )
             # Calculate max height needed for different x-axis ticks and labels
             # TODO: Take the lower tick of the y-axis into account.
-            # TODO: Add spacing between x-axis and labels
             ascent, descent = self.font_small.getmetrics()
-            max_height_small = ascent - descent
+            max_height_small_font = ascent + descent
+            h_padding = 1
 
-            max_x_label_h = max(
-                x_label_h,
-                start_time_h,
-                end_time_h,
-                curr_time_label_h,
-                max_height_small,
-            )
+            # max_x_label_h = max(
+            #     x_label_h,
+            #     start_time_h,
+            #     end_time_h,
+            #     curr_time_label_h,
+            #     max_height_small,
+            # )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
             self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
             (
@@ -220,17 +220,17 @@ if is_raspberry_pi():
             # Calculate max width needed for y-axis
             # TODO: Add spacing between y-axis and labels
             max_y_label_w = max(
-                y_label_h,
-                math.ceil(start_time_w / 2),
-                formatted_lower_tick_y_w,
-                formatted_upper_tick_y_w,
+                max_height_small_font,
+                math.ceil(start_time_w / 2) + h_padding,
+                formatted_lower_tick_y_w + 2 * h_padding,
+                formatted_upper_tick_y_w + 2 * h_padding,
             )
             # --- Draw data ---
             top_left_point = (max_y_label_w, 0)
             # Calculate the area for the plot
             plot_width, plot_height = (
                 canvas_width - max_y_label_w,
-                canvas_height - max_x_label_h,
+                canvas_height - max_height_small_font,
             )
             # Convert the time series to pixel positions
             num_datapoints = len(df_timeline.index)
