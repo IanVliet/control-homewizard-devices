@@ -350,7 +350,11 @@ if is_raspberry_pi():
             x_pos_x_label = math.ceil((canvas_width - x_label_w) / 2)
             try:
                 x_pos_x_label = self.get_position_label_avoid_overlap(
-                    x_pos_current_time, curr_time_label_w, x_label_w, canvas_width
+                    x_pos_current_time,
+                    curr_time_label_w,
+                    x_label_w,
+                    canvas_width,
+                    h_padding,
                 )
             except NameError:
                 self.logger.error(
@@ -559,22 +563,27 @@ if is_raspberry_pi():
             tick_length: int,
             label_length: int,
             total_length: int,
+            padding: int,
         ):
+            """
+            Calculates position of label to avoid other text (tick).
+            Also accounts for padding around the tick text.
+            Two cases for overlap:
+            1. Tick is left of center and would overlap with label
+            (End of tick is past the start of the label)
+            --> move label to the right
+            2. Tick is right of center and would overlap with label
+            (End of label is past the start of the tick)
+            --> move label to the left
+            """
             init_label_start_pos = (total_length - label_length) // 2
             init_label_end_pos = init_label_start_pos + label_length
             tick_end_pos = tick_start_pos + tick_length
-            diff_tick_end_to_label = init_label_start_pos - tick_end_pos
-            diff_label_end_to_label = tick_start_pos - init_label_end_pos
-            # Two cases for overlap:
-            # 1. Tick is left of center and would overlap with label
-            # (End of tick is past the start of the label)
-            # --> move label to the right
-            # 2. Tick is right of center and would overlap with label
-            # (End of label is past the start of the tick)
-            # --> move label to the left
+            # Add spacing between label and tick
+            diff_tick_end_to_label = init_label_start_pos - (tick_end_pos + padding)
+            diff_label_end_to_label = (tick_start_pos - padding) - init_label_end_pos
             overlap = diff_tick_end_to_label < 0 and diff_label_end_to_label < 0
             left_sided = diff_tick_end_to_label >= diff_label_end_to_label
-            # TODO: Add spacing between label and tick
             if overlap and left_sided:
                 pos_label = init_label_start_pos - diff_tick_end_to_label
             elif overlap and not left_sided:
