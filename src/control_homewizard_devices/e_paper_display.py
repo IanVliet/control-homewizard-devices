@@ -143,7 +143,9 @@ if is_raspberry_pi():
             )
             y_label_image = Image.new("L", (y_label_w, y_label_h), epd.GRAY1)
             y_label_draw = ImageDraw.Draw(y_label_image)
-            y_label_draw.text((0, 0), y_label_text, fill=epd.GRAY4)
+            y_label_draw.text(
+                (0, 0), y_label_text, fill=epd.GRAY4, font=self.font_small
+            )
             # Rotate the y-label and add it to the plot
             rotated_y_label = y_label_image.rotate(90, expand=True)
             x_pos_y_label = 0
@@ -345,7 +347,12 @@ if is_raspberry_pi():
                     "No position for current time tick, "
                     "so no overlap between tick for current time and x-label possible"
                 )
-            plot_draw.text((x_pos_x_label, y_pos_x_label), x_label_text, fill=epd.GRAY4)
+            plot_draw.text(
+                (x_pos_x_label, y_pos_x_label),
+                x_label_text,
+                fill=epd.GRAY4,
+                font=self.font_small,
+            )
             # Draw the start and end tick on the x-axis.
             # Only in case they do not overlap with the current tick.
             start_time_x = x_pixels[0] + max_y_label_w
