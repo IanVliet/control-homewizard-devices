@@ -273,7 +273,7 @@ class DeviceController:
                 logger.debug(f"Power prediction DataFrame:\n{df_power_prediction}")
 
                 data, results = self.optimization.solve_schedule_devices(
-                    df_power_prediction, self.socket_and_battery_list
+                    df_power_prediction, self.socket_and_battery_list, overcharge=True
                 )
                 self.df_power_interpolated = data.df_power_interpolated
                 self.df_schedule = results[-1].df_variables
