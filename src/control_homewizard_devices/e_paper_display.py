@@ -140,6 +140,7 @@ if is_raspberry_pi():
             )
             plot_image = Image.new("L", (canvas_width, canvas_height), epd.GRAY1)
             plot_draw = ImageDraw.Draw(plot_image)
+            # TODO: Refactor code into more logical positions and functions
 
             # Calculate max height for small font
             ascent, descent = self.font_small.getmetrics()
@@ -160,11 +161,7 @@ if is_raspberry_pi():
             rotated_y_label = y_label_image.rotate(90, expand=True)
             x_pos_y_label = 0
             y_pos_y_label = math.ceil((canvas_height - y_label_w) / 2)
-            # TODO: Ensure the y-label does not overlap with the ticks.
             plot_image.paste(rotated_y_label, (x_pos_y_label, y_pos_y_label))
-
-            # TODO: Specify the right font (smaller than 16)
-            # TODO: And use it for all written text.
             # Calculate position x position and space needed for x-axis label
             x_label_text = "Time"
             x_label_w, x_label_h = get_text_width_and_height(
@@ -189,17 +186,7 @@ if is_raspberry_pi():
                 formatted_current_time, self.font_small
             )
             # Calculate max height needed for different x-axis ticks and labels
-            # TODO: Take the lower tick of the y-axis into account.
-
             h_padding = 1
-
-            # max_x_label_h = max(
-            #     x_label_h,
-            #     start_time_h,
-            #     end_time_h,
-            #     curr_time_label_h,
-            #     max_height_small,
-            # )
             min_power, max_power = self.calculate_min_max_power(df_timeline)
             self.logger.debug("Min power: %s, Max power: %s", min_power, max_power)
             (
@@ -222,7 +209,6 @@ if is_raspberry_pi():
             )
 
             # Calculate max width needed for y-axis
-            # TODO: Add spacing between y-axis and labels
             max_y_label_w = max(
                 max_height_small_font,
                 math.ceil(start_time_w / 2) + h_padding,
@@ -243,7 +229,16 @@ if is_raspberry_pi():
             data_image = Image.new("L", (plot_width, plot_height), color=epd.GRAY1)
             data_draw = ImageDraw.Draw(data_image)
 
+            # Draw line for predicted power
+            self.logger.debug("Drawing predicted power line")
+            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
+            predicted_power_points = self.power_array_to_points(
+                predicted_power, min_power, max_power, plot_height, x_pixels
+            )
+            data_draw.line(predicted_power_points, fill=epd.GRAY2, width=2)
+
             self.logger.debug("Current timeindex: %s", curr_timeindex)
+
             # Get the position of the current time index
             if curr_timeindex in df_timeline.index:
                 curr_time_pos = int(df_timeline.index.get_indexer([curr_timeindex])[0])
@@ -261,11 +256,6 @@ if is_raspberry_pi():
                         "skipping drawing measured power"
                     )
                 else:
-                    self.logger.debug(
-                        "Drawing measured power from index: %s up to index: %s",
-                        notnan_pos,
-                        curr_time_pos,
-                    )
                     if np.isnan(measured_power[notnan_pos : curr_time_pos + 1]).any():
                         error_msg = (
                             "Measured power contains NaN values between "
@@ -281,7 +271,7 @@ if is_raspberry_pi():
                         plot_height,
                         x_pixels[notnan_pos : curr_time_pos + 1],
                     )
-                    data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
+
                     self.logger.debug("Drawing scheduled devices")
                     # TODO: Consider what to do when the icon does not fit
                     self.draw_device_schedule(
@@ -295,6 +285,12 @@ if is_raspberry_pi():
                         notnan_pos,
                         curr_time_pos,
                     )
+                    self.logger.debug(
+                        "Drawing measured power from index: %s up to index: %s",
+                        notnan_pos,
+                        curr_time_pos,
+                    )
+                    data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
 
             # Draw a vertical line for the current time
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
@@ -320,16 +316,7 @@ if is_raspberry_pi():
                     font=self.font_small,
                 )
 
-            # Draw line for predicted power
-            self.logger.debug("Drawing predicted power line")
-            predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
-            predicted_power_points = self.power_array_to_points(
-                predicted_power, min_power, max_power, plot_height, x_pixels
-            )
-            data_draw.line(predicted_power_points, fill=epd.GRAY2, width=2)
-
             plot_image.paste(data_image, top_left_point)
-
             # --- Draw lines for axes ---
             # Calculate the points for the zero line
             zero_height = self.power_value_to_y_pixel(
@@ -406,8 +393,6 @@ if is_raspberry_pi():
                     font=self.font_small,
                 )
 
-            # TODO: Group relevant codes together into logical positions and functions
-            # TODO: Ensure the ticks are drawn if they do not overlap with zero label.
             # Draw the max tick on the y-axis
             y_pos_upper = self.power_value_to_y_pixel(
                 upper_tick_y, min_power, max_power, plot_height
@@ -831,6 +816,14 @@ def calculate_icon_positions(
     pixel_points_lower: list[tuple[int, int]],
     init_icon_size: int = ICON_SIZE,
 ) -> list[tuple[int, int, int]]:
+    """
+    Calculate the positions of the icons with (x, y, size).
+    The upper points are the upper points in the graph,
+    and the lower points are the lower points in the graph.
+    Since a pixel down ⬇ has a larger y in the display's coordinate system,
+    it means that the upper points have smaller values than
+    the lower points.
+    """
     if len(pixel_points_upper) != len(pixel_points_lower):
         error_msg = (
             "The upper and lower power points lists should have the same length. "
@@ -853,13 +846,18 @@ def calculate_icon_positions(
     icon_positions_and_sizes = []
     y_pixels_upper = [point[1] for point in pixel_points_upper]
     y_pixels_lower = [point[1] for point in pixel_points_lower]
+    # TODO: Fix the skip_ranges, since icons can overlap in the measured power
     skip_ranges = []
     for icon_size in icon_sizes:
         icon_indices = math.ceil(icon_size / pixels_width_per_index)
         start_window_index = 0
         end_window_index = icon_indices
         while end_window_index < len(pixel_points_upper):
-            if any(s <= start_window_index < e for s, e in skip_ranges):
+            if any(
+                s <= start_window_index < e or s <= end_window_index < e
+                for s, e in skip_ranges
+            ):
+                # if any(s <= start_window_index < e for s, e in skip_ranges):
                 start_window_index += 1
                 end_window_index += 1
                 continue

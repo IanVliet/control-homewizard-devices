@@ -164,6 +164,8 @@ class DeviceSchedulingOptimization:
             # charge duration is set to the length of the dataframe
             max_duration = len(self.variables.df_variables.index)
             for device in self.data.socket_list:
+                # TODO: Perhaps reduce energy stored in devices
+                # To ensure that the energy stored in a device does not go to zero.
                 self.schedule_device_available_power(device, max_duration)
 
         # Charge the aggregate battery at the end of the schedule.
