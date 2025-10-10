@@ -141,12 +141,17 @@ if is_raspberry_pi():
             plot_image = Image.new("L", (canvas_width, canvas_height), epd.GRAY1)
             plot_draw = ImageDraw.Draw(plot_image)
 
+            # Calculate max height for small font
+            ascent, descent = self.font_small.getmetrics()
+            max_height_small_font = ascent + descent
             # Draw label power for y-axis
             y_label_text = "power [kW]"
             y_label_w, y_label_h = get_text_width_and_height(
                 y_label_text, self.font_small
             )
-            y_label_image = Image.new("L", (y_label_w, y_label_h), epd.GRAY1)
+            y_label_image = Image.new(
+                "L", (y_label_w, max_height_small_font), epd.GRAY1
+            )
             y_label_draw = ImageDraw.Draw(y_label_image)
             y_label_draw.text(
                 (0, 0), y_label_text, fill=epd.GRAY4, font=self.font_small
@@ -185,8 +190,7 @@ if is_raspberry_pi():
             )
             # Calculate max height needed for different x-axis ticks and labels
             # TODO: Take the lower tick of the y-axis into account.
-            ascent, descent = self.font_small.getmetrics()
-            max_height_small_font = ascent + descent
+
             h_padding = 1
 
             # max_x_label_h = max(
@@ -388,7 +392,6 @@ if is_raspberry_pi():
             x_pos_end_time = end_time_x - end_time_w // 2
             min_x_pos_end_tick = min(canvas_width - end_time_w, x_pos_end_time)
             if x_pos_current_time < min_x_pos_end_tick:
-                # TODO: Ensure the tick does not fall off the display.
                 # Draw a small line at the exact position
                 # Draw the text as close as possible without falling off the display
                 self.logger.debug("Drawing end time tick")
@@ -432,7 +435,7 @@ if is_raspberry_pi():
             )
             min_y_pos_y_lower_tick = min(
                 y_pos_lower - formatted_lower_tick_y_h // 2,
-                plot_height,
+                plot_height - formatted_lower_tick_y_h,
             )
             plot_draw.line(
                 [(max_y_label_w - 2, y_pos_lower), (max_y_label_w, y_pos_lower)],
