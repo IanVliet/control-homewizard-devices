@@ -854,7 +854,7 @@ def calculate_icon_positions(
         end_window_index = icon_indices
         while end_window_index < len(pixel_points_upper):
             if any(
-                s <= start_window_index < e or s <= end_window_index < e
+                s < start_window_index < e or s < end_window_index < e
                 for s, e in skip_ranges
             ):
                 # if any(s <= start_window_index < e for s, e in skip_ranges):
