@@ -245,6 +245,31 @@ if is_raspberry_pi():
             else:
                 curr_time_pos = None
 
+            # TODO: Draw it before the measured power and in gray
+            # such that it is clear what the current available power is.
+            if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
+                self.logger.debug(
+                    "Drawing current time line at index: %s", curr_time_pos
+                )
+                curr_time_x = x_pixels[curr_time_pos]
+                data_draw.line(
+                    [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
+                    fill=epd.GRAY3,
+                )
+                self.logger.debug("Drawing current time label")
+                x_pos_current_time = (
+                    curr_time_x - curr_time_label_w // 2 + max_y_label_w
+                )
+                plot_draw.text(
+                    (
+                        x_pos_current_time,
+                        plot_height,
+                    ),
+                    formatted_current_time,
+                    fill=epd.GRAY4,
+                    font=self.font_small,
+                )
+
             if curr_time_pos is not None:
                 measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
                 notnan_mask = ~np.isnan(measured_power)
@@ -273,7 +298,6 @@ if is_raspberry_pi():
                     )
 
                     self.logger.debug("Drawing scheduled devices")
-                    # TODO: Consider what to do when the icon does not fit
                     self.draw_device_schedule(
                         data_draw,
                         min_power,
@@ -293,28 +317,6 @@ if is_raspberry_pi():
                     data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
 
             # Draw a vertical line for the current time
-            if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
-                self.logger.debug(
-                    "Drawing current time line at index: %s", curr_time_pos
-                )
-                curr_time_x = x_pixels[curr_time_pos]
-                data_draw.line(
-                    [(curr_time_x, 0), (curr_time_x, plot_height - 1)],
-                    fill=epd.GRAY4,
-                )
-                self.logger.debug("Drawing current time label")
-                x_pos_current_time = (
-                    curr_time_x - curr_time_label_w // 2 + max_y_label_w
-                )
-                plot_draw.text(
-                    (
-                        x_pos_current_time,
-                        plot_height,
-                    ),
-                    formatted_current_time,
-                    fill=epd.GRAY4,
-                    font=self.font_small,
-                )
 
             plot_image.paste(data_image, top_left_point)
             # --- Draw lines for axes ---
@@ -464,9 +466,7 @@ if is_raspberry_pi():
                 .sum(axis=1)
                 .to_numpy()
             )
-            # Get the maximum of the predicted and measured power
-            # TODO: In case the scheduled devices are included into the graph -->
-            # take the devices into accounting when calculating the min and max
+            # Get the maximum of the predicted and measured power and the devices
             max_measured = np.nanmax(measured_power, initial=0)
             max_predicted = np.nanmax(predicted_power, initial=0)
             self.logger.debug(
@@ -617,6 +617,14 @@ if is_raspberry_pi():
             notnan_pos: int,
             curr_time_pos: int,
         ):
+            """
+            Draw the measured and predicted power consumption of
+            the devices in the plot.
+            Also tile the area between the previous and current line
+            with the icons of the devices.
+            The minimum space required for an icon is 8 pixels
+            (set by calculate_icon_positions).
+            """
             prev_measured_power_array = np.zeros(curr_time_pos + 1 - notnan_pos)
             prev_predicted_power_array = np.zeros(len(x_pixels) - curr_time_pos - 1)
             # initialize prev line with zero line
@@ -653,7 +661,6 @@ if is_raspberry_pi():
                     self.logger.error(error_msg)
                     raise ValueError(error_msg)
 
-                # TODO: Ensure measured power is positive when a device consumes power.
                 sliced_measured_power_array = power_array[
                     notnan_pos : curr_time_pos + 1
                 ]
@@ -750,14 +757,12 @@ if is_raspberry_pi():
                     icon_y = y + math.ceil((self.cell_height - ICON_SIZE) / 2)
                     L_image.paste(icon, (icon_x, icon_y), mask=icon)
 
-                # TODO: Draw the pandas dataframe via a plot
                 if df_timeline is None:
                     logger.warning(
                         "Drawing plot skipped, since the df_timeline is None"
                     )
                 else:
                     logger.info("Drawing plot on E-paper display")
-                    # TODO: Manually draw plot
                     if curr_timeindex is None:
                         logger.error(
                             "Current timeindex is None, so no plot will be drawn"
@@ -767,9 +772,6 @@ if is_raspberry_pi():
                             df_timeline, curr_timeindex
                         )
                         L_image.paste(plot_image, (0, self.height_all_icons))
-                # epd.init()
-                # TODO: Test/Consider whether clear is needed.
-                # epd.Clear()
                 epd.Init_4Gray()
                 epd.display_4Gray(epd.getbuffer_4Gray(L_image))
                 logger.info("Sleep E-paper display")
@@ -803,8 +805,9 @@ if is_raspberry_pi():
 def get_text_width_and_height(
     text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont
 ):
-    # TODO: Ensure width is properly calculated,
-    # Or atleast that the ticks are properly placed.
+    """
+    Get the width and height of the given text with the given font.
+    """
     text_bbox = font.getbbox(text)
     text_w = math.ceil(text_bbox[2] - text_bbox[0])
     text_h = math.ceil(text_bbox[3] - text_bbox[1])
@@ -832,8 +835,16 @@ def calculate_icon_positions(
         raise ValueError(error_msg)
     if len(pixel_points_upper) <= 2:
         return []
-    # TODO: Properly take into account that power can sometimes be negative,
-    # and thus flip the upper and lower points.
+    if any(
+        pixel_points_lower[idx] < pixel_points_upper[idx]
+        for idx in range(len(pixel_points_upper))
+    ):
+        error_msg = (
+            "The lower power points should be lower than the upper power points. "
+            "In other words, the y value of the lower points should be larger "
+            "This is not the case for the given points."
+        )
+        raise ValueError(error_msg)
     # Find the maximum length of an icon possible based on width
     max_icon_size = min(
         init_icon_size, int(pixel_points_upper[-1][0] - pixel_points_upper[0][0])
@@ -846,7 +857,6 @@ def calculate_icon_positions(
     icon_positions_and_sizes = []
     y_pixels_upper = [point[1] for point in pixel_points_upper]
     y_pixels_lower = [point[1] for point in pixel_points_lower]
-    # TODO: Fix the skip_ranges, since icons can overlap in the measured power
     skip_ranges = []
     for icon_size in icon_sizes:
         icon_indices = math.ceil(icon_size / pixels_width_per_index)
