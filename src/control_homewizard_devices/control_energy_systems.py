@@ -20,6 +20,7 @@ from control_homewizard_devices.schedule_devices import (
 from control_homewizard_devices.constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
 from contextlib import AsyncExitStack
 import sys
+from typing import cast
 
 from quartz_solar_forecast.forecast import run_forecast
 from datetime import datetime
@@ -371,6 +372,7 @@ class DeviceController:
                 "Using the first value for the position"
             )
             pos_curr_timestep = pos_curr_timestep[0]
+        pos_curr_timestep = int(pos_curr_timestep)
         if pos_curr_timestep > len(self.df_timeline.index):
             self.logger.warning(
                 "A timestamp in df_timeline for the current time could not be found."
@@ -494,7 +496,9 @@ class DeviceController:
         if self.df_timeline is None:
             self.logger.warning("df_timeline has not yet been initialized")
             return
-        old_avg = self.df_timeline.at[timeindex, col_name]
+        old_avg: float = cast(
+            float, self.df_timeline.at[pd.Timestamp(timeindex), col_name]
+        )
         self.df_timeline.at[timeindex, col_name] = (
             old_avg + (new_value - old_avg) / self.measurement_count
         )

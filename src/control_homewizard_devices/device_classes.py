@@ -137,9 +137,15 @@ class SocketDevice(CompleteDevice):
         # the (instantaneous) attributes that change due to each measurement
         self.inst_state = None
         # whether the device should power on or off
-        self.updated_state = False
+        self.updated_state: bool | None = None
         self.energy_stored = 0.0
         self.time_last_update = time()
+        # Use a in_control boolean flag that determines if:
+        # 1. the schedule should be used to change the state
+        # 2. or the set state should be kept until device is full
+        # This should enable users to set the state
+        # until the device is full for special circumstances.
+        self.in_control = True
 
     @property
     def max_power_usage(self):
@@ -164,6 +170,15 @@ class SocketDevice(CompleteDevice):
             else:
                 logger.warning(f"{self.device_name}'s device state is None")
 
+            # Check whether the measured state is the same as the updated state
+            if self.updated_state is not None:
+                if self.in_control and self.updated_state != self.inst_state:
+                    logger.info(
+                        f"{self.device_name} state has been changed outside control."
+                        " Setting in_control to False until device is full."
+                    )
+                    self.in_control = False
+
             # log the power, current and state
             logger.info(f"{self.device_name} power: {self.inst_power_usage} W")
             logger.debug(f"{self.device_name} current: {self.inst_current}")
@@ -185,6 +200,13 @@ class SocketDevice(CompleteDevice):
                 # If the socket is on and the power usage is below the full power ratio,
                 # we consider it fully charged
                 self.energy_stored = self.energy_capacity
+                # If the device was not in control, we can set it back to in control
+                if not self.in_control:
+                    self.in_control = True
+                    logger.info(
+                        f"{self.device_name} is fully charged. "
+                        "Setting in_control to True."
+                    )
             elif (
                 self.inst_state
                 and self.inst_power_usage >= IS_FULL_POWER_RATIO * self.max_power_usage
@@ -226,10 +248,20 @@ class SocketDevice(CompleteDevice):
         return self._max_power_usage <= available_power
 
     async def update_power_state(self, logger: logging.Logger):
-        if self.hwe_device is not None:
-            await self.hwe_device.state_set(power_on=self.updated_state)
-            self.time_last_update = time()
-            logger.info(f"{self.device_name} power state set to: {self.updated_state}")
+        if self.hwe_device is not None and self.updated_state is not None:
+            if self.in_control:
+                await self.hwe_device.state_set(power_on=self.updated_state)
+                self.time_last_update = time()
+                logger.info(
+                    f"{self.device_name} power state set to: {self.updated_state}"
+                )
+            else:
+                logger.info(
+                    f"{self.device_name} is not in control. "
+                    "Power state will not be updated."
+                )
+        elif self.updated_state is None:
+            logger.warning(f"{self.device_name}'s updated_state is None.")
         else:
             logger.warning(f"{self.device_name}'s hwe_device is None.")
 
