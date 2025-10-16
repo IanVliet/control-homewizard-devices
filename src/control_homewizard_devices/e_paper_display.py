@@ -728,52 +728,54 @@ if is_raspberry_pi():
                     self.all_resized_icons[(device, icon_size)] = icon
                 draw.bitmap((int(x), int(y)), icon, fill=None)
 
+        def create_complete_image(
+            self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
+        ) -> Image.Image:
+            logger = self.logger
+            epd = self.epd
+            font = self.font_large
+            L_image = Image.new("L", (epd.width, epd.height), 255)
+            draw = ImageDraw.Draw(L_image)
+
+            for device in self.devices:
+                x, y = self.positions[device]
+                icon = self.resized_icons[device]
+                # draw text
+                percentage = round(device.energy_stored / device.energy_capacity * 100)
+                text = f"{percentage}%"
+                text_w, text_h = get_text_width_and_height(text, font)
+                text_x = x + math.ceil((self.max_text_width - text_w) / 2)
+                text_y = y + math.ceil((self.cell_height - text_h) / 2)
+                draw.text((text_x, text_y), text, font=font, fill=0)
+
+                # add icon
+                icon_x = x + self.max_text_width
+                icon_y = y + math.ceil((self.cell_height - ICON_SIZE) / 2)
+                L_image.paste(icon, (icon_x, icon_y), mask=icon)
+
+            if df_timeline is None:
+                logger.warning("Drawing plot skipped, since the df_timeline is None")
+            else:
+                logger.info("Drawing plot on E-paper display")
+                if curr_timeindex is None:
+                    logger.error("Current timeindex is None, so no plot will be drawn")
+                else:
+                    plot_image = self.create_image_full_plot(
+                        df_timeline, curr_timeindex
+                    )
+                    L_image.paste(plot_image, (0, self.height_all_icons))
+            return L_image
+
         def draw_full_update(
             self, df_timeline: pd.DataFrame | None, curr_timeindex: datetime | None
         ):
             try:
                 logger = self.logger
                 logger.info("Attempting full update")
+                full_image = self.create_complete_image(df_timeline, curr_timeindex)
                 epd = self.epd
-                font = self.font_large
-                L_image = Image.new("L", (epd.width, epd.height), 255)
-                draw = ImageDraw.Draw(L_image)
-
-                for device in self.devices:
-                    x, y = self.positions[device]
-                    icon = self.resized_icons[device]
-                    # draw text
-                    percentage = round(
-                        device.energy_stored / device.energy_capacity * 100
-                    )
-                    text = f"{percentage}%"
-                    text_w, text_h = get_text_width_and_height(text, font)
-                    text_x = x + math.ceil((self.max_text_width - text_w) / 2)
-                    text_y = y + math.ceil((self.cell_height - text_h) / 2)
-                    draw.text((text_x, text_y), text, font=font, fill=0)
-
-                    # add icon
-                    icon_x = x + self.max_text_width
-                    icon_y = y + math.ceil((self.cell_height - ICON_SIZE) / 2)
-                    L_image.paste(icon, (icon_x, icon_y), mask=icon)
-
-                if df_timeline is None:
-                    logger.warning(
-                        "Drawing plot skipped, since the df_timeline is None"
-                    )
-                else:
-                    logger.info("Drawing plot on E-paper display")
-                    if curr_timeindex is None:
-                        logger.error(
-                            "Current timeindex is None, so no plot will be drawn"
-                        )
-                    else:
-                        plot_image = self.create_image_full_plot(
-                            df_timeline, curr_timeindex
-                        )
-                        L_image.paste(plot_image, (0, self.height_all_icons))
                 epd.Init_4Gray()
-                epd.display_4Gray(epd.getbuffer_4Gray(L_image))
+                epd.display_4Gray(epd.getbuffer_4Gray(full_image))
                 logger.info("Sleep E-paper display")
                 epd.sleep()
 
