@@ -140,7 +140,6 @@ if is_raspberry_pi():
             )
             plot_image = Image.new("L", (canvas_width, canvas_height), epd.GRAY1)
             plot_draw = ImageDraw.Draw(plot_image)
-            # TODO: Refactor code into more logical positions and functions
 
             # Calculate max height for small font
             ascent, descent = self.font_small.getmetrics()
@@ -245,8 +244,6 @@ if is_raspberry_pi():
             else:
                 curr_time_pos = None
 
-            # TODO: Draw it before the measured power and in gray
-            # such that it is clear what the current available power is.
             if curr_time_pos is not None and 0 <= curr_time_pos < num_datapoints:
                 self.logger.debug(
                     "Drawing current time line at index: %s", curr_time_pos
@@ -853,8 +850,7 @@ def calculate_icon_positions(
     )
     min_icon_size = 8  # Minimum size to still be recognizable
     icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
-    # TODO: Consider what should happen when no icons fit
-    # even when there is still a (significant) difference between upper and lower
+
     pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
     icon_positions_and_sizes = []
     y_pixels_upper = [point[1] for point in pixel_points_upper]
