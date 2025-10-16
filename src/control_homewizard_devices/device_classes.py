@@ -142,8 +142,8 @@ class SocketDevice(CompleteDevice):
         self.time_last_update = time()
         # Use a in_control boolean flag that determines if:
         # 1. the schedule should be used to change the state
-        # 2. or the set state should be kept until device is full
-        # This should enable users to set the state
+        # 2. or the device should be kept on until the device is full
+        # This should enable users to turn a device on manually
         # until the device is full for special circumstances.
         self.in_control = True
 
@@ -170,11 +170,11 @@ class SocketDevice(CompleteDevice):
             else:
                 logger.warning(f"{self.device_name}'s device state is None")
 
-            # Check whether the measured state is the same as the updated state
+            # Check whether the measured state is on while the updated state is off
             if self.updated_state is not None:
-                if self.in_control and self.updated_state != self.inst_state:
+                if self.in_control and not self.updated_state and self.inst_state:
                     logger.info(
-                        f"{self.device_name} state has been changed outside control."
+                        f"{self.device_name} has been turned on outside control."
                         " Setting in_control to False until device is full."
                     )
                     self.in_control = False
