@@ -216,15 +216,10 @@ class DeviceController:
             self.update_df_timeline(-total_power)
             if self.on_raspberry_pi:
                 logger.info("Update E-paper display")
-                # TODO: Update display partially
                 # Update display
                 self.draw_display.draw_full_update(
                     self.df_timeline, self.curr_timeindex
                 )
-                # TODO: Update graph partially of actual available energy only in case
-                # enough time steps have passed since the last timesteps
-                # TODO: Update display fully in case it has been more than 5 times
-                # since the last full update
 
             async with asyncio.TaskGroup() as tg:
                 for socket in self.sorted_sockets:
@@ -373,7 +368,7 @@ class DeviceController:
             )
             pos_curr_timestep = pos_curr_timestep[0]
         pos_curr_timestep = int(pos_curr_timestep)
-        if pos_curr_timestep > len(self.df_timeline.index):
+        if pos_curr_timestep >= len(self.df_timeline.index):
             self.logger.warning(
                 "A timestamp in df_timeline for the current time could not be found."
                 "A new dataframe should be initialized soon."
@@ -388,7 +383,7 @@ class DeviceController:
             self.logger.error(error_msg)
             raise IndexError(error_msg)
         next_pos_timestep = pos_curr_timestep + 1
-        if next_pos_timestep > len(self.df_timeline.index):
+        if next_pos_timestep >= len(self.df_timeline.index):
             self.logger.info(
                 "There is no next timeindex in df_timeline. "
                 "Therefore, the next df_timeline should be initialized soon."
