@@ -207,18 +207,6 @@ class SocketDevice(CompleteDevice):
                         f"{self.device_name} is fully charged. "
                         "Setting in_control to True."
                     )
-            elif (
-                self.inst_state
-                and self.inst_power_usage >= IS_FULL_POWER_RATIO * self.max_power_usage
-                and not self.updated_state
-            ):
-                # If the socket is on and the power usage is
-                # above the expected power usage of a full device,
-                # and the state is not set to the state determined by the scheduler,
-                # we assume that a user has turned a socket on
-                # and we have detected that the device is not
-                # (or no longer) fully charged
-                self.energy_stored = 0.0
             else:
                 # Note: Updates energy stored with a measurement of the time passed
                 # since the last update
@@ -229,6 +217,9 @@ class SocketDevice(CompleteDevice):
                     f"last state update: {time_passed:.3f} s"
                 )
                 self.energy_stored += self.inst_power_usage * time_passed / 3600
+                # Perhaps limit energy stored to max capacity
+                if self.energy_stored > self.energy_capacity:
+                    self.energy_stored = self.energy_capacity
             logger.info(f"{self.device_name} energy stored: {self.energy_stored} Wh")
 
     def get_instantaneous_power(self):
