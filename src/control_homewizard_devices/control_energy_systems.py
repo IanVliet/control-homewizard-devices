@@ -472,12 +472,6 @@ class DeviceController:
                         device.inst_power_usage,
                     )
                 else:
-                    if total_inst_power_usage_aggregate_battery == 0.0:
-                        logger.warning(
-                            "Updating of moving average failed for aggregate battery, "
-                            "since total_inst_power_usage_aggregate_battery is 0"
-                        )
-                        continue
                     self.update_moving_average(
                         timeindex,
                         TimelineColNames.measured_power_consumption(device),
