@@ -7,6 +7,7 @@ PERIODIC_SLEEP_DURATION = 30  # Sleep duration for periodic tasks in seconds
 # Below this ratio of inst power to full power the device is
 # considered to be fully charged
 IS_FULL_POWER_RATIO = 0.1
+PREV_SWITCHES_LEN = 5 * 60 // PERIODIC_SLEEP_DURATION
 
 AGGREGATE_BATTERY = "aggregate_battery"
 

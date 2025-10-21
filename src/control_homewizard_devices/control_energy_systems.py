@@ -17,7 +17,12 @@ from control_homewizard_devices.schedule_devices import (
     Variables,
     ColNames,
 )
-from control_homewizard_devices.constants import TZ, DELTA_T, PERIODIC_SLEEP_DURATION
+from control_homewizard_devices.constants import (
+    TZ,
+    DELTA_T,
+    PERIODIC_SLEEP_DURATION,
+    PREV_SWITCHES_LEN,
+)
 from contextlib import AsyncExitStack
 import sys
 from typing import cast
@@ -63,6 +68,10 @@ class DeviceController:
         )
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
         self.optimization = DeviceSchedulingOptimization(DELTA_T)
+        self.prev_switches = np.zeros(
+            (PREV_SWITCHES_LEN, len(self.sorted_sockets)), dtype=bool
+        )
+        self.switch_index = 0
         self.curr_timeindex: datetime | None = None
         self.measurement_count: int = 0
         self.df_timeline: pd.DataFrame | None = None
@@ -307,11 +316,29 @@ class DeviceController:
         main_result = results[-1]
         df_schedule = main_result.df_variables
         current_schedule = df_schedule.iloc[0]
-        for socket in self.sorted_sockets:
-            if current_schedule[ColNames.state(socket)] > 0:
-                socket.updated_state = True
+        for socket_index, socket in enumerate(self.sorted_sockets):
+            new_state: bool = current_schedule[ColNames.state(socket)] > 0
+            if socket.updated_state == new_state:
+                # No switch has occured
+                self.prev_switches[self.switch_index, socket_index] = False
+                continue
+            # Switch has occured
+            if np.any(self.prev_switches[:, socket_index]):
+                # If a switch has already occured in the recent past,
+                # do not allow switching
+                self.logger.info(
+                    f"Switch for socket {socket.device_name} not allowed, "
+                    "since a switch has already occured recently."
+                )
+                # Keep previous state
+                # socket.updated_state = socket.updated_state
+                self.prev_switches[self.switch_index, socket_index] = False
             else:
-                socket.updated_state = False
+                socket.updated_state = new_state
+                # Update the prev_switches array
+                self.prev_switches[self.switch_index, socket_index] = True
+        # Update the switch index for the circular buffer
+        self.switch_index = (self.switch_index + 1) % PREV_SWITCHES_LEN
 
     def update_df_timeline(self, available_power: float):
         logger = self.logger
