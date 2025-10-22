@@ -73,8 +73,11 @@ The difference between the measured and predicted total available power at the c
 
 ## Icon attributions
 <a href="https://www.flaticon.com/free-icons/e-bike" title="e bike icons">E bike icons created by Freepik - Flaticon</a>
-<a href="https://www.flaticon.com/free-icons/showerhead" title="showerhead icons">Showerhead icons created by Fajrul Fitrianto - Flaticon</a>
+
 <a href="https://www.flaticon.com/free-icons/sink" title="sink icons">Sink icons created by Freepik - Flaticon</a>
+
+<a href="https://www.flaticon.com/free-icons/showerhead" title="showerhead icons">Showerhead icons created by Fajrul Fitrianto - Flaticon</a>
+
 <a href="https://www.flaticon.com/free-icons/battery" title="battery icons">Battery icons created by Pixel perfect - Flaticon</a>
 
 # Fonts
