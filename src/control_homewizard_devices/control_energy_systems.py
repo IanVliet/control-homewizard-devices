@@ -317,7 +317,7 @@ class DeviceController:
         df_schedule = main_result.df_variables
         current_schedule = df_schedule.iloc[0]
         for socket_index, socket in enumerate(self.sorted_sockets):
-            new_state: bool = current_schedule[ColNames.state(socket)] > 0
+            new_state = True if current_schedule[ColNames.state(socket)] > 0 else False
             if socket.updated_state == new_state:
                 # No switch has occured
                 self.prev_switches[self.switch_index, socket_index] = False
