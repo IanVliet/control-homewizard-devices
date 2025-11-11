@@ -22,7 +22,10 @@ from control_homewizard_devices.constants import (
     DELTA_T,
     PERIODIC_SLEEP_DURATION,
     PREV_SWITCHES_LEN,
+    BASIC_RETRY_DELAY,
+    MAX_RETRY_DELAY,
 )
+from homewizard_energy import RequestError
 from contextlib import AsyncExitStack
 import sys
 from typing import cast
@@ -213,29 +216,36 @@ class DeviceController:
         Periodically updates the schedule for all devices.
         """
         logger = self.logger
+        retry_delay = BASIC_RETRY_DELAY
         while True:
-            async with asyncio.TaskGroup() as tg:
-                for device in self.all_devices:
-                    tg.create_task(device.perform_measurement(logger))
-            logger.info("===== devices info gathered and updated =====")
-            total_power = self.get_total_available_power()
-            logger.info(f"Total available power: {-total_power} W")
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for device in self.all_devices:
+                        tg.create_task(device.perform_measurement(logger))
+                logger.info("===== devices info gathered and updated =====")
+                total_power = self.get_total_available_power()
+                logger.info(f"Total available power: {-total_power} W")
 
-            self.primary_scheduling_with_fallback(total_power)
-            self.update_df_timeline(-total_power)
-            if self.on_raspberry_pi:
-                logger.info("Update E-paper display")
-                # Update display
-                self.draw_display.draw_full_update(
-                    self.df_timeline, self.curr_timeindex
-                )
+                self.primary_scheduling_with_fallback(total_power)
+                self.update_df_timeline(-total_power)
+                if self.on_raspberry_pi:
+                    logger.info("Update E-paper display")
+                    # Update display
+                    self.draw_display.draw_full_update(
+                        self.df_timeline, self.curr_timeindex
+                    )
 
-            async with asyncio.TaskGroup() as tg:
-                for socket in self.sorted_sockets:
-                    tg.create_task(socket.update_power_state(logger))
-            logger.info("===== socket states updated =====")
+                async with asyncio.TaskGroup() as tg:
+                    for socket in self.sorted_sockets:
+                        tg.create_task(socket.update_power_state(logger))
+                logger.info("===== socket states updated =====")
+                retry_delay = BASIC_RETRY_DELAY
 
-            await asyncio.sleep(PERIODIC_SLEEP_DURATION)
+                await asyncio.sleep(PERIODIC_SLEEP_DURATION)
+            except RequestError:
+                logger.error(f"Global connection issue. Retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
 
     def get_total_available_power(self) -> float:
         return sum(
