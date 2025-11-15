@@ -242,7 +242,9 @@ class DeviceController:
                 retry_delay = BASIC_RETRY_DELAY
 
                 await asyncio.sleep(PERIODIC_SLEEP_DURATION)
-            except RequestError:
+            except* RequestError as eg:
+                for err in eg.exceptions:
+                    logger.error(f"Device error: {err}")
                 logger.error(f"Global connection issue. Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
