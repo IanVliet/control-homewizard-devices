@@ -887,7 +887,7 @@ def calculate_icon_positions(
                 upper_window = y_pixels_upper[start_window_index:end_window_index]
                 lower_window = y_pixels_lower[start_window_index:end_window_index]
                 # Calculate difference between
-                # upper points (that have smaller values) and lower points (larger values)
+                # upper points (smaller values) and lower points (larger values)
                 lowest_y_upper = max(upper_window)
                 highest_y_lower = min(lower_window)
                 if highest_y_lower - lowest_y_upper < icon_size:
