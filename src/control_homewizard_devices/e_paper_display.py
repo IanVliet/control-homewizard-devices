@@ -843,17 +843,19 @@ def calculate_icon_positions(
     for pixel_points_upper, pixel_points_lower in zip(
         line_segments_upper, line_segments_lower, strict=True
     ):
-        if len(pixel_points_upper) != len(pixel_points_lower):
-            error_msg = (
-                "The upper and lower power points lists should have the same length. "
-                f"Got {len(pixel_points_upper)} and {len(pixel_points_lower)}"
-            )
-            raise ValueError(error_msg)
-        if len(pixel_points_upper) <= 2:
+        if len(pixel_points_upper) <= 2 or len(pixel_points_lower) <= 2:
             return icon_positions_and_sizes
+        dict_upper = dict(pixel_points_upper)
+        dict_lower = dict(pixel_points_lower)
+
+        common_x_set = set(dict_upper) & set(dict_lower)
+        common_x_list = sorted(common_x_set)
+        y_pixels_upper = [dict_upper[x] for x in common_x_list]
+        y_pixels_lower = [dict_lower[x] for x in common_x_list]
+
         if any(
-            pixel_points_lower[idx] < pixel_points_upper[idx]
-            for idx in range(len(pixel_points_upper))
+            y_pixels_lower[idx] < y_pixels_upper[idx]
+            for idx in range(len(y_pixels_upper))
         ):
             error_msg = (
                 "The lower power points should be lower than the upper power points. "
@@ -862,14 +864,10 @@ def calculate_icon_positions(
             )
             raise ValueError(error_msg)
         # Find the maximum length of an icon possible based on width
-        max_icon_size = min(
-            init_icon_size, int(pixel_points_upper[-1][0] - pixel_points_upper[0][0])
-        )
+        max_icon_size = min(init_icon_size, int(common_x_list[-1] - common_x_list[0]))
         icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
 
         pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
-        y_pixels_upper = [point[1] for point in pixel_points_upper]
-        y_pixels_lower = [point[1] for point in pixel_points_lower]
         skip_ranges = []
         for icon_size in icon_sizes:
             icon_indices = math.ceil(icon_size / pixels_width_per_index)
