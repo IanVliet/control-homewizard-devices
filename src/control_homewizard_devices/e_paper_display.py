@@ -231,10 +231,12 @@ if is_raspberry_pi():
             # Draw line for predicted power
             self.logger.debug("Drawing predicted power line")
             predicted_power = df_timeline[TimelineColNames.PREDICTED_POWER].to_numpy()
-            predicted_power_points = self.power_array_to_points(
+            predicted_power_points = power_array_to_points(
                 predicted_power, min_power, max_power, plot_height, x_pixels
             )
-            data_draw.line(predicted_power_points, fill=epd.GRAY2, width=2)
+            draw_line_segments(
+                data_draw, predicted_power_points, fill=epd.GRAY2, width=2
+            )
 
             self.logger.debug("Current timeindex: %s", curr_timeindex)
 
@@ -269,29 +271,20 @@ if is_raspberry_pi():
 
             if curr_time_pos is not None:
                 measured_power = df_timeline[TimelineColNames.MEASURED_POWER].to_numpy()
-                notnan_mask = ~np.isnan(measured_power)
-                notnan_pos = np.where(notnan_mask)[0][0] if notnan_mask.any() else None
                 # Should go from the first not-nan value to the current time position
-                if notnan_pos is None:
+                if measured_power.size == 0 or np.isnan(measured_power).all():
                     self.logger.debug(
-                        "All measured power values are NaN, "
+                        "All measured power values are NaN "
+                        "or the array is empty "
                         "skipping drawing measured power"
                     )
                 else:
-                    if np.isnan(measured_power[notnan_pos : curr_time_pos + 1]).any():
-                        error_msg = (
-                            "Measured power contains NaN values between "
-                            "the first not-NaN value and the current time position. "
-                            "Skipping..."
-                        )
-                        self.logger.error(error_msg)
-                        raise ValueError(error_msg)
-                    measured_power_points = self.power_array_to_points(
-                        measured_power[notnan_pos : curr_time_pos + 1],
+                    measured_power_points = power_array_to_points(
+                        measured_power[: curr_time_pos + 1],
                         min_power,
                         max_power,
                         plot_height,
-                        x_pixels[notnan_pos : curr_time_pos + 1],
+                        x_pixels[: curr_time_pos + 1],
                     )
 
                     self.logger.debug("Drawing scheduled devices")
@@ -302,16 +295,15 @@ if is_raspberry_pi():
                         plot_height,
                         x_pixels,
                         df_timeline,
-                        notnan_mask,
-                        notnan_pos,
                         curr_time_pos,
                     )
                     self.logger.debug(
-                        "Drawing measured power from index: %s up to index: %s",
-                        notnan_pos,
+                        "Drawing measured power up to index: %s",
                         curr_time_pos,
                     )
-                    data_draw.line(measured_power_points, fill=epd.GRAY4, width=2)
+                    draw_line_segments(
+                        data_draw, measured_power_points, fill=epd.GRAY4, width=2
+                    )
 
             # Draw a vertical line for the current time
 
@@ -517,20 +509,6 @@ if is_raspberry_pi():
             min_power = np.nanmin(min_stacked_power)
             return min_power, max_power
 
-        def power_array_to_points(
-            self,
-            power_array: np.ndarray,
-            min_power,
-            max_power,
-            plot_height: int,
-            x_pixels: np.ndarray,
-        ):
-            # Normalized to 0-1
-            normalized_power = (power_array - min_power) / (max_power - min_power)
-            y_pixels = (1 - normalized_power) * (plot_height - 1)
-            points = list(zip(x_pixels, y_pixels, strict=True))
-            return points
-
         def power_value_to_y_pixel(
             self,
             power_value: float,
@@ -610,8 +588,6 @@ if is_raspberry_pi():
             plot_height: int,
             x_pixels: np.ndarray,
             df_timeline: pd.DataFrame,
-            notnan_mask: np.ndarray,
-            notnan_pos: int,
             curr_time_pos: int,
         ):
             """
@@ -622,18 +598,18 @@ if is_raspberry_pi():
             The minimum space required for an icon is 8 pixels
             (set by calculate_icon_positions).
             """
-            prev_measured_power_array = np.zeros(curr_time_pos + 1 - notnan_pos)
+            prev_measured_power_array = np.zeros(curr_time_pos + 1)
             prev_predicted_power_array = np.zeros(len(x_pixels) - curr_time_pos - 1)
             # initialize prev line with zero line
-            prev_measured_points = self.power_array_to_points(
-                np.zeros(len(prev_measured_power_array)),
+            prev_measured_points = power_array_to_points(
+                prev_measured_power_array,
                 min_power,
                 max_power,
                 plot_height,
-                x_pixels[notnan_pos : curr_time_pos + 1],
+                x_pixels[: curr_time_pos + 1],
             )
-            prev_predicted_points = self.power_array_to_points(
-                np.zeros(len(prev_predicted_power_array)),
+            prev_predicted_points = power_array_to_points(
+                prev_predicted_power_array,
                 min_power,
                 max_power,
                 plot_height,
@@ -649,30 +625,22 @@ if is_raspberry_pi():
                 power_array = df_timeline[
                     TimelineColNames.measured_power_consumption(device)
                 ].to_numpy()
-                # Notnan mask should match the measured power array
-                if not np.array_equal(notnan_mask, ~np.isnan(power_array)):
-                    error_msg = (
-                        "The not-nan mask does not match the measured power array "
-                        f"for device {device.device_name}. "
-                    )
-                    self.logger.error(error_msg)
-                    raise ValueError(error_msg)
 
-                sliced_measured_power_array = power_array[
-                    notnan_pos : curr_time_pos + 1
-                ]
+                sliced_measured_power_array = power_array[: curr_time_pos + 1]
                 stacked_measured_power_array = (
                     prev_measured_power_array + sliced_measured_power_array
                 )
                 prev_measured_power_array = stacked_measured_power_array
-                measured_power_points = self.power_array_to_points(
+                measured_power_points = power_array_to_points(
                     stacked_measured_power_array,
                     min_power,
                     max_power,
                     plot_height,
-                    x_pixels[notnan_pos : curr_time_pos + 1],
+                    x_pixels[: curr_time_pos + 1],
                 )
-                draw.line(measured_power_points, fill=self.epd.GRAY3, width=1)
+                draw_line_segments(
+                    draw, measured_power_points, fill=self.epd.GRAY3, width=1
+                )
 
                 predicted_power_array = df_timeline[
                     TimelineColNames.predicted_power_consumption(device)
@@ -684,14 +652,16 @@ if is_raspberry_pi():
                     sliced_predicted_power_array + prev_predicted_power_array
                 )
                 prev_predicted_power_array = stacked_predicted_power_array
-                predicted_power_points = self.power_array_to_points(
+                predicted_power_points = power_array_to_points(
                     stacked_predicted_power_array,
                     min_power,
                     max_power,
                     plot_height,
                     x_pixels[curr_time_pos + 1 :],
                 )
-                draw.line(predicted_power_points, fill=self.epd.GRAY2, width=1)
+                draw_line_segments(
+                    draw, predicted_power_points, fill=self.epd.GRAY2, width=1
+                )
                 # Tile the space between the previous and current line
                 positions_and_sizes_predicted_power = calculate_icon_positions(
                     predicted_power_points, prev_predicted_points, init_icon_size=32
@@ -813,9 +783,51 @@ def get_text_width_and_height(
     return text_w, text_h
 
 
+def draw_line_segments(
+    image_draw: ImageDraw.ImageDraw,
+    line_segments: list[list[tuple]],
+    fill: int,
+    width: int,
+):
+    for points in line_segments:
+        image_draw.line(points, fill=fill, width=width)
+
+
+def power_array_to_points(
+    power_array: np.ndarray,
+    min_power,
+    max_power,
+    plot_height: int,
+    x_pixels: np.ndarray,
+) -> list[list[tuple]]:
+    """
+    Create line segments from the x_pixels and power array.
+    A new line segment is started when nan is encountered.
+
+    (E.g. due to missing data due to connection issues)
+    """
+    # Normalized to 0-1
+    normalized_power = (power_array - min_power) / (max_power - min_power)
+    y_pixels = (1 - normalized_power) * (plot_height - 1)
+    # The assumption is that only y can have nan
+    all_line_segments = []
+    curr_line_segment = []
+    for x, y in zip(x_pixels, y_pixels, strict=True):
+        if np.isnan(y):
+            if curr_line_segment:
+                all_line_segments.append(curr_line_segment)
+                curr_line_segment = []
+        else:
+            curr_line_segment.append((x, y))
+    if curr_line_segment:
+        all_line_segments.append(curr_line_segment)
+
+    return all_line_segments
+
+
 def calculate_icon_positions(
-    pixel_points_upper: list[tuple[int, int]],
-    pixel_points_lower: list[tuple[int, int]],
+    line_segments_upper: list[list[tuple[int, int]]],
+    line_segments_lower: list[list[tuple[int, int]]],
     init_icon_size: int = ICON_SIZE,
 ) -> list[tuple[int, int, int]]:
     """
@@ -826,69 +838,72 @@ def calculate_icon_positions(
     it means that the upper points have smaller values than
     the lower points.
     """
-    if len(pixel_points_upper) != len(pixel_points_lower):
-        error_msg = (
-            "The upper and lower power points lists should have the same length. "
-            f"Got {len(pixel_points_upper)} and {len(pixel_points_lower)}"
-        )
-        raise ValueError(error_msg)
-    if len(pixel_points_upper) <= 2:
-        return []
-    if any(
-        pixel_points_lower[idx] < pixel_points_upper[idx]
-        for idx in range(len(pixel_points_upper))
-    ):
-        error_msg = (
-            "The lower power points should be lower than the upper power points. "
-            "In other words, the y value of the lower points should be larger "
-            "This is not the case for the given points."
-        )
-        raise ValueError(error_msg)
-    # Find the maximum length of an icon possible based on width
-    max_icon_size = min(
-        init_icon_size, int(pixel_points_upper[-1][0] - pixel_points_upper[0][0])
-    )
-    min_icon_size = 8  # Minimum size to still be recognizable
-    icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
-
-    pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
     icon_positions_and_sizes = []
-    y_pixels_upper = [point[1] for point in pixel_points_upper]
-    y_pixels_lower = [point[1] for point in pixel_points_lower]
-    skip_ranges = []
-    for icon_size in icon_sizes:
-        icon_indices = math.ceil(icon_size / pixels_width_per_index)
-        start_window_index = 0
-        end_window_index = icon_indices
-        while end_window_index < len(pixel_points_upper):
-            if any(
-                s < start_window_index < e or s < end_window_index < e
-                for s, e in skip_ranges
-            ):
-                # if any(s <= start_window_index < e for s, e in skip_ranges):
-                start_window_index += 1
-                end_window_index += 1
-                continue
-            upper_window = y_pixels_upper[start_window_index:end_window_index]
-            lower_window = y_pixels_lower[start_window_index:end_window_index]
-            # Calculate difference between
-            # upper points (that have smaller values) and lower points (larger values)
-            lowest_y_upper = max(upper_window)
-            highest_y_lower = min(lower_window)
-            if highest_y_lower - lowest_y_upper < icon_size:
-                # Icon does not fit here
-                # (only allow an icon to fit when upper is above lower)
-                start_window_index += 1
-                end_window_index += 1
-                continue
-            # Icon fits here,
-            # so save the position and size and continue 1 icon size later
-            x_pos = pixel_points_upper[start_window_index][0]
-            y_pos = lowest_y_upper
-            icon_positions_and_sizes.append((x_pos, y_pos, icon_size))
-            skip_ranges.append((start_window_index, end_window_index))
-            start_window_index += icon_indices
-            end_window_index += icon_indices
-        # If this icon size cannot fit anywhere anymore,
-        # attempt the next smaller icon size.
+    min_icon_size = 8  # Minimum size to still be recognizable
+    for pixel_points_upper, pixel_points_lower in zip(
+        line_segments_upper, line_segments_lower, strict=True
+    ):
+        if len(pixel_points_upper) != len(pixel_points_lower):
+            error_msg = (
+                "The upper and lower power points lists should have the same length. "
+                f"Got {len(pixel_points_upper)} and {len(pixel_points_lower)}"
+            )
+            raise ValueError(error_msg)
+        if len(pixel_points_upper) <= 2:
+            return icon_positions_and_sizes
+        if any(
+            pixel_points_lower[idx] < pixel_points_upper[idx]
+            for idx in range(len(pixel_points_upper))
+        ):
+            error_msg = (
+                "The lower power points should be lower than the upper power points. "
+                "In other words, the y value of the lower points should be larger "
+                "This is not the case for some of the given points."
+            )
+            raise ValueError(error_msg)
+        # Find the maximum length of an icon possible based on width
+        max_icon_size = min(
+            init_icon_size, int(pixel_points_upper[-1][0] - pixel_points_upper[0][0])
+        )
+        icon_sizes = list(range(max_icon_size, min_icon_size - 1, -8))
+
+        pixels_width_per_index = pixel_points_upper[1][0] - pixel_points_lower[0][0]
+        y_pixels_upper = [point[1] for point in pixel_points_upper]
+        y_pixels_lower = [point[1] for point in pixel_points_lower]
+        skip_ranges = []
+        for icon_size in icon_sizes:
+            icon_indices = math.ceil(icon_size / pixels_width_per_index)
+            start_window_index = 0
+            end_window_index = icon_indices
+            while end_window_index < len(pixel_points_upper):
+                if any(
+                    s < start_window_index < e or s < end_window_index < e
+                    for s, e in skip_ranges
+                ):
+                    # if any(s <= start_window_index < e for s, e in skip_ranges):
+                    start_window_index += 1
+                    end_window_index += 1
+                    continue
+                upper_window = y_pixels_upper[start_window_index:end_window_index]
+                lower_window = y_pixels_lower[start_window_index:end_window_index]
+                # Calculate difference between
+                # upper points (that have smaller values) and lower points (larger values)
+                lowest_y_upper = max(upper_window)
+                highest_y_lower = min(lower_window)
+                if highest_y_lower - lowest_y_upper < icon_size:
+                    # Icon does not fit here
+                    # (only allow an icon to fit when upper is above lower)
+                    start_window_index += 1
+                    end_window_index += 1
+                    continue
+                # Icon fits here,
+                # so save the position and size and continue 1 icon size later
+                x_pos = pixel_points_upper[start_window_index][0]
+                y_pos = lowest_y_upper
+                icon_positions_and_sizes.append((x_pos, y_pos, icon_size))
+                skip_ranges.append((start_window_index, end_window_index))
+                start_window_index += icon_indices
+                end_window_index += icon_indices
+            # If this icon size cannot fit anywhere anymore,
+            # attempt the next smaller icon size.
     return icon_positions_and_sizes

@@ -15,7 +15,9 @@ def test_calculate_icon_positions_8x24_steps_of_4():
     print(lower_points)
     expected_positions = [(0, 0, 8), (8, 0, 8), (16, 0, 8)]
 
-    positions = calculate_icon_positions(upper_points, lower_points, init_icon_size=8)
+    positions = calculate_icon_positions(
+        [upper_points], [lower_points], init_icon_size=8
+    )
     print(positions)
     assert positions == expected_positions
 
@@ -33,7 +35,9 @@ def test_calculate_icon_positions_8x24_steps_of_6():
     print(lower_points)
     expected_positions = [(0, 0, 8), (12, 0, 8)]
 
-    positions = calculate_icon_positions(upper_points, lower_points, init_icon_size=8)
+    positions = calculate_icon_positions(
+        [upper_points], [lower_points], init_icon_size=8
+    )
     print(positions)
     assert positions == expected_positions
 
@@ -54,7 +58,9 @@ def test_calculate_icon_positions_stepped_16x24():
     print(lower_points)
     expected_positions = [(8, 0, 16), (0, 8, 8)]
 
-    positions = calculate_icon_positions(upper_points, lower_points, init_icon_size=16)
+    positions = calculate_icon_positions(
+        [upper_points], [lower_points], init_icon_size=16
+    )
     print(positions)
     assert positions == expected_positions
 
@@ -82,6 +88,8 @@ def test_calculate_icon_positions_triangle():
     print(lower_points)
     expected_positions = [(8, 8, 16)]
 
-    positions = calculate_icon_positions(upper_points, lower_points, init_icon_size=16)
+    positions = calculate_icon_positions(
+        [upper_points], [lower_points], init_icon_size=16
+    )
     print(positions)
     assert positions == expected_positions
