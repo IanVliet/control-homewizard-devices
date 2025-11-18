@@ -840,8 +840,11 @@ def calculate_icon_positions(
     """
     icon_positions_and_sizes = []
     min_icon_size = 8  # Minimum size to still be recognizable
+    common_segments_upper, common_segments_lower = get_segments_upper_and_lower(
+        line_segments_upper, line_segments_lower
+    )
     for pixel_points_upper, pixel_points_lower in zip(
-        line_segments_upper, line_segments_lower, strict=True
+        common_segments_upper, common_segments_lower, strict=True
     ):
         if len(pixel_points_upper) <= 2 or len(pixel_points_lower) <= 2:
             return icon_positions_and_sizes
@@ -905,3 +908,65 @@ def calculate_icon_positions(
             # If this icon size cannot fit anywhere anymore,
             # attempt the next smaller icon size.
     return icon_positions_and_sizes
+
+
+def get_segments_upper_and_lower(
+    line_segments_upper: list[list[tuple[int, int]]],
+    line_segments_lower: list[list[tuple[int, int]]],
+) -> tuple[list[list[tuple[int, int]]], list[list[tuple[int, int]]]]:
+    """
+    Given two lists containing line segments,
+    returns the two lists, but only if both the upper and lower exist.
+    """
+    segments_exhausted = False
+    upper_indices = [0, 0]
+    lower_indices = [0, 0]
+    new_upper: list[list] = [[]]
+    new_lower: list[list] = [[]]
+    upper_changed_segment = False
+    lower_changed_segment = False
+    while not segments_exhausted:
+        upper_segment = line_segments_upper[upper_indices[0]]
+        lower_segment = line_segments_lower[lower_indices[0]]
+        upper_tuple = upper_segment[upper_indices[1]]
+        lower_tuple = lower_segment[lower_indices[1]]
+        if lower_changed_segment or upper_changed_segment:
+            new_upper.append([])
+            new_lower.append([])
+            upper_changed_segment = False
+            lower_changed_segment = False
+        if upper_tuple[0] == lower_tuple[0]:
+            new_upper[-1].append(upper_tuple)
+            new_lower[-1].append(lower_tuple)
+            lower_changed_segment = increase_indices(lower_indices, len(lower_segment))
+            upper_changed_segment = increase_indices(upper_indices, len(upper_segment))
+        elif upper_tuple[0] > lower_tuple[0]:
+            # Data missing in upper -->
+            # Skip a lower tuple
+            lower_changed_segment = increase_indices(lower_indices, len(lower_segment))
+        else:
+            # Data missing in lower -->
+            # Skip an upper tuple
+            upper_changed_segment = increase_indices(upper_indices, len(upper_segment))
+        # If one of the current tuples is the last in the segment
+        # --> missing data has occured
+        # --> go to the next segment
+        segments_exhausted = (upper_indices[0] >= len(line_segments_upper)) or (
+            lower_indices[0] >= len(line_segments_lower)
+        )
+    return new_upper, new_lower
+
+
+def increase_indices(indices: list[int], segment_length: int) -> bool:
+    """
+    Increases indices[1] with 1.
+    Unless it would go out of bounds (determined by segment length).
+    Then indices[0] increases with 1 and indices[1] is set to 0.
+    Returns True if the increase is for indices[0]
+    """
+    if indices[1] + 1 >= segment_length:
+        indices[0] += 1
+        indices[1] = 0
+        return True
+    indices[1] += 1
+    return False
