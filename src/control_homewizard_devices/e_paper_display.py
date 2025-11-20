@@ -911,21 +911,30 @@ def calculate_icon_positions(
 
 
 def get_segments_upper_and_lower(
-    line_segments_upper: list[list[tuple[int, int]]],
-    line_segments_lower: list[list[tuple[int, int]]],
+    unfiltered_line_segments_upper: list[list[tuple[int, int]]],
+    unfiltered_line_segments_lower: list[list[tuple[int, int]]],
 ) -> tuple[list[list[tuple[int, int]]], list[list[tuple[int, int]]]]:
     """
     Given two lists containing line segments,
     returns the two lists, but only if both the upper and lower exist.
     """
-    segments_exhausted = False
+    # Remove any segments that do not contain any elements.
+    line_segments_upper = [
+        segment for segment in unfiltered_line_segments_upper if segment
+    ]
+    line_segments_lower = [
+        segment for segment in unfiltered_line_segments_lower if segment
+    ]
     upper_indices = [0, 0]
     lower_indices = [0, 0]
     new_upper: list[list] = [[]]
     new_lower: list[list] = [[]]
     upper_changed_segment = False
     lower_changed_segment = False
-    while not segments_exhausted:
+    while not (
+        (upper_indices[0] >= len(line_segments_upper))
+        or (lower_indices[0] >= len(line_segments_lower))
+    ):
         upper_segment = line_segments_upper[upper_indices[0]]
         lower_segment = line_segments_lower[lower_indices[0]]
         upper_tuple = upper_segment[upper_indices[1]]
@@ -951,9 +960,6 @@ def get_segments_upper_and_lower(
         # If one of the current tuples is the last in the segment
         # --> missing data has occured
         # --> go to the next segment
-        segments_exhausted = (upper_indices[0] >= len(line_segments_upper)) or (
-            lower_indices[0] >= len(line_segments_lower)
-        )
     return new_upper, new_lower
 
 
