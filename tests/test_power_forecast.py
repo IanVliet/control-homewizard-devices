@@ -765,3 +765,133 @@ def test_socket_on_overcharge(power_1kw, request):
             1,
         ]
     )
+
+
+def test_socket_on_minimum_battery_charge(power_1kw, request):
+    """
+    An optional device with a minimum charge parameter turns on
+    when the batteries have atleast a certain percentage of charge.
+    Before that the device does not turn on.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket",
+            1000,
+            500,
+            1,
+            False,
+            delta_t=DELTA_T_TEST,
+            min_battery_charge=0.5,
+        ),
+        Battery(
+            "",
+            "HWE-BAT",
+            "test battery",
+            1000,
+            1000,
+            {"name": "test_user", "token": ""},
+        ),
+    ]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_1kw, devices_list, overcharge=True
+    )
+    if request.config.getoption("--debug-scheduler"):
+        print_schedule_results(data, results)
+    df_schedules = results[-1].df_variables
+    assert df_schedules[
+        f"schedule {devices_list[0].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            0,
+            0,
+            1,
+            1,
+        ]
+    )
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == pytest.approx(
+        [
+            1,
+            1,
+            0,
+            0,
+        ]
+    )
+
+
+def test_multiple_socket_on_minimum_battery_charge(power_1kw, request):
+    """
+    An optional device with a minimum charge parameter turns on
+    when the batteries have atleast a certain ratio of charge.
+    This also ensures devices with lower priority turn on later.
+    Before that both devices do not turn on.
+    """
+    devices_list: list[SocketDevice | Battery] = [
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket 1",
+            1000,
+            250,
+            1,
+            False,
+            delta_t=DELTA_T_TEST,
+            min_battery_charge=0.5,
+        ),
+        SocketDevice(
+            "",
+            "HWE-SKT",
+            "test socket 2",
+            1000,
+            500,
+            2,
+            False,
+            delta_t=DELTA_T_TEST,
+            min_battery_charge=0.0,
+        ),
+        Battery(
+            "",
+            "HWE-BAT",
+            "test battery",
+            1000,
+            1000,
+            {"name": "test_user", "token": ""},
+        ),
+    ]
+    optimization = DeviceSchedulingOptimization(DELTA_T_TEST)
+    data, results = optimization.solve_schedule_devices(
+        power_1kw, devices_list, overcharge=True
+    )
+    if request.config.getoption("--debug-scheduler"):
+        print_schedule_results(data, results)
+    df_schedules = results[-1].df_variables
+    assert df_schedules[
+        f"schedule {devices_list[0].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            0,
+            0,
+            1,
+            0,
+        ]
+    )
+    assert df_schedules[
+        f"schedule {devices_list[1].device_name}"
+    ].to_list() == pytest.approx(
+        [
+            0,
+            0,
+            0,
+            1,
+        ]
+    )
+    assert df_schedules[f"schedule {AGGREGATE_BATTERY}"].to_list() == pytest.approx(
+        [
+            1,
+            1,
+            0,
+            0,
+        ]
+    )

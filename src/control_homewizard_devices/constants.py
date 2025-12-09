@@ -10,6 +10,7 @@ IS_FULL_POWER_RATIO = 0.1
 PREV_SWITCHES_LEN = 5 * 60 // PERIODIC_SLEEP_DURATION
 
 AGGREGATE_BATTERY = "aggregate_battery"
+ABSOLUTE_TOLERANCE = 1e-6
 
 TZ = ZoneInfo("Europe/Amsterdam")
 

@@ -1,4 +1,4 @@
-from math import ceil
+from math import ceil, isclose
 import pandas as pd
 from control_homewizard_devices.device_classes import (
     SocketDevice,
@@ -6,6 +6,7 @@ from control_homewizard_devices.device_classes import (
     AggregateBattery,
 )
 from control_homewizard_devices.utils import ColNames
+from control_homewizard_devices.constants import ABSOLUTE_TOLERANCE
 from typing import Any, cast
 
 
@@ -147,6 +148,13 @@ class DeviceSchedulingOptimization:
             results.append(self.variables)
 
         for device in self.data.optional_socket_list:
+            # If a battery is present and if a significant minimum battery charge is set
+            # charge the batteries before turning on the device.
+            if len(self.data.battery_list) > 0 and not isclose(
+                device.min_battery_charge, 0.0, abs_tol=ABSOLUTE_TOLERANCE
+            ):
+                self.charge_batteries_ratio(device.min_battery_charge)
+
             # Determine minimum number of timesteps needed to charge the device.
             charge_duration = self.get_charge_duration(device)
             # Schedule if there is enough available power
@@ -164,8 +172,6 @@ class DeviceSchedulingOptimization:
             # charge duration is set to the length of the dataframe
             max_duration = len(self.variables.df_variables.index)
             for device in self.data.socket_list:
-                # TODO: Perhaps reduce energy stored in devices
-                # To ensure that the energy stored in a device does not go to zero.
                 self.schedule_device_available_power(device, max_duration)
 
         # Charge the aggregate battery at the end of the schedule.
@@ -425,6 +431,63 @@ class DeviceSchedulingOptimization:
         cumsum_energy = increased_energy.cumsum()
         df_variables[ColNames.energy_stored(device)] += cumsum_energy
 
+    def charge_batteries_ratio(self, charge_ratio: float):
+        """
+        Charge and uncharge the batteries with the available power.
+        (Charges in case available power is positive,
+        uncharges in case available power is negative.)
+        The batteries are charged until the battery is partly full,
+         determined by the charge ratio.
+        """
+
+        df_variables = self.variables.df_variables
+        mask = (
+            (df_variables[ColNames.state(self.data.aggregate_battery)] == 0)
+            & (df_variables[ColNames.AVAILABLE_POWER] != 0)
+            & (
+                df_variables[ColNames.energy_stored(self.data.aggregate_battery)]
+                < (charge_ratio * self.data.aggregate_battery.max_energy_stored)
+            )
+        )
+        # Power consumed (capped at max_power_usage)
+        possible_power_consumed = df_variables.loc[mask, ColNames.AVAILABLE_POWER].clip(
+            lower=-self.data.aggregate_battery.max_power_usage,
+            upper=self.data.aggregate_battery.max_power_usage,
+        )
+
+        # Update energy stored (capped at max_energy_stored)
+        increased_energy = pd.Series(0.0, index=df_variables.index)
+        increased_energy.loc[mask] = possible_power_consumed * self.delta_t
+        cumsum_energy = increased_energy.cumsum()
+        new_energy_stored_unlimited = (
+            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            + cumsum_energy
+        )
+        df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)] = (
+            new_energy_stored_unlimited.clip(
+                lower=0,
+                upper=(charge_ratio * self.data.aggregate_battery.max_energy_stored),
+            )
+        )
+        # Calculate the actual power consumed
+        actual_power_consumed = (
+            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            - df_variables.loc[
+                mask, ColNames.energy_stored(self.data.aggregate_battery)
+            ]
+            .shift(1)
+            .fillna(0)
+        ) / self.delta_t
+
+        # Update available power
+        df_variables.loc[mask, ColNames.AVAILABLE_POWER] -= actual_power_consumed
+
+        # Update state (capped at 1)
+        new_state = (
+            actual_power_consumed / self.data.aggregate_battery.max_power_usage
+        ).clip(lower=-1, upper=1)
+        df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
+
     def charge_batteries_remaining(self):
         """
         Charge and uncharge the batteries with the remaining available power.
@@ -471,7 +534,7 @@ class DeviceSchedulingOptimization:
         ) / self.delta_t
 
         # Update available power
-        df_variables.loc[mask, ColNames.AVAILABLE_POWER] = actual_power_consumed
+        df_variables.loc[mask, ColNames.AVAILABLE_POWER] -= actual_power_consumed
 
         # Update state (capped at 1)
         new_state = (

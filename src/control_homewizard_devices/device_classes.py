@@ -126,6 +126,7 @@ class SocketDevice(CompleteDevice):
         priority: int,
         daily_need: bool,
         delta_t: float = DELTA_T,
+        min_battery_charge: float = 0.0,
         **kwargs,
     ):
         super().__init__(ip_address, device_type, device_name, **kwargs)
@@ -134,6 +135,7 @@ class SocketDevice(CompleteDevice):
         self.policy = SocketDeviceSchedulePolicy(self, delta_t)
         self.priority = priority
         self.daily_need = daily_need
+        self.min_battery_charge = min_battery_charge
         # the (instantaneous) attributes that change due to each measurement
         self.inst_state = None
         # whether the device should power on or off
