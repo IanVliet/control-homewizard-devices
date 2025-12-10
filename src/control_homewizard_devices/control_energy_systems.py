@@ -82,6 +82,7 @@ class DeviceController:
         # Flag to ensure that data is added to freshly initialized dataframe.
         self.timeline_initialized_event = asyncio.Event()
         self.df_timeline: pd.DataFrame = self.initialize_df_timeline()
+        self.update_df_timeline_with_forecast()
         self.timeline_initialized_event.set()
         self.on_raspberry_pi = is_raspberry_pi()
         if self.on_raspberry_pi:
@@ -209,21 +210,32 @@ class DeviceController:
                     f"Attempt number: {attempt}"
                 )
                 self.df_solar_forecast = self.get_forecast_data()
+            self.update_df_timeline_with_forecast()
 
-            if not isinstance(self.df_solar_forecast.index, pd.DatetimeIndex):
-                raise TypeError(
-                    f"Expected DatetimeIndex, got {type(self.df_solar_forecast.index)}"
-                )
-            # Slice and reindex the solar forecast data with the index of df_timeline
-            df_solar_slice = self.df_solar_forecast.loc[
-                self.df_timeline.index.min() : self.df_timeline.index.max()
-            ]
-            df_interpolated_power = df_solar_slice.reindex(
-                self.df_timeline.index
-            ).interpolate(method="time")
-            self.df_timeline[TimelineColNames.PREDICTED_POWER] = (
-                df_interpolated_power * 1000
+    def update_df_timeline_with_forecast(self):
+        if self.df_solar_forecast is None:
+            self.logger.info(
+                "Update of df_timeline with forecast failed, "
+                "because df_solar_forecast is None"
             )
+            return
+        if not isinstance(self.df_solar_forecast.index, pd.DatetimeIndex):
+            raise TypeError(
+                f"Expected DatetimeIndex, got {type(self.df_solar_forecast.index)}"
+            )
+        # Slice and reindex the solar forecast data with the index of df_timeline
+        df_solar_slice = self.df_solar_forecast.loc[
+            self.df_timeline.index.min() : self.df_timeline.index.max()
+        ]
+        df_interpolated_power = df_solar_slice.reindex(
+            self.df_timeline.index
+        ).interpolate(method="time")
+        self.logger.info("Setting predicted power in df_timeline with forecast.")
+        self.df_timeline[TimelineColNames.PREDICTED_POWER] = (
+            df_interpolated_power * 1000
+        )
+        df_timeline_str = self.df_timeline.to_string(float_format="%.3f")
+        self.logger.debug(f"df_timeline:\\n{df_timeline_str}")
 
     async def periodic_schedule_update(self):
         """
