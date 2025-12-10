@@ -181,6 +181,19 @@ class DeviceController:
         Retrieves the power forecast for all solar panels on a daily basis.
         """
         while True:
+            retry_delay = BASIC_RETRY_DELAY
+            # in case the forecast was retrieved unsuccesfully, try again with a delay.
+            attempt = 0
+            while self.df_solar_forecast is None:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                attempt += 1
+                self.logger.info(
+                    "Attempting to acquire forecast data again. "
+                    f"Attempt number: {attempt}"
+                )
+                self.df_solar_forecast = self.get_forecast_data()
+            self.update_df_timeline_with_forecast()
             delay = self.START_FORECAST_TIME.seconds_until_next()
             self.logger.info(
                 f"Waiting for {delay} seconds until next forecast update..."
@@ -198,19 +211,6 @@ class DeviceController:
                 "A new day has arrived so the energy stored "
                 "in the sockets is set back to 0.0"
             )
-            retry_delay = BASIC_RETRY_DELAY
-            # in case the forecast was retrieved unsuccesfully, try again with a delay.
-            attempt = 0
-            while self.df_solar_forecast is None:
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
-                attempt += 1
-                self.logger.info(
-                    "Attempting to acquire forecast data again. "
-                    f"Attempt number: {attempt}"
-                )
-                self.df_solar_forecast = self.get_forecast_data()
-            self.update_df_timeline_with_forecast()
 
     def update_df_timeline_with_forecast(self):
         if self.df_solar_forecast is None:
