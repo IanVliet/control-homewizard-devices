@@ -7,7 +7,8 @@
             "max_power_usage": 100,
             "energy_capacity": 1000,
             "priority": 1,
-            "daily_need": true
+            "daily_need": true,
+            "min_battery_charge": 0.5
         },
         {
             "device_name": "P1 meter",
