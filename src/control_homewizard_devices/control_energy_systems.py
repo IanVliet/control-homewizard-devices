@@ -77,7 +77,10 @@ class DeviceController:
         self.switch_index = 0
         self.curr_timeindex: datetime | None = None
         self.measurement_count: int = 0
-        self.df_timeline: pd.DataFrame | None = None
+        # Flag to ensure that data is added to freshly initialized dataframe.
+        self.timeline_initialized_event = asyncio.Event()
+        self.df_timeline: pd.DataFrame = self.initialize_df_timeline()
+        self.timeline_initialized_event.set()
         self.on_raspberry_pi = is_raspberry_pi()
         if self.on_raspberry_pi:
             from control_homewizard_devices.e_paper_display import DrawDisplay
@@ -123,73 +126,52 @@ class DeviceController:
             self.logger.error("Failed to retrieve any daily power forecast.")
         return df_solar_forecast
 
-    def initialize_df_timeline(self):
+    def initialize_df_timeline(self) -> pd.DataFrame:
         """
         Creates a dataframe containing the following:
-        - the predicted solar power of the day
-        - columns for the measured available power (history)
+        - column for the predicted solar power of the day (prediction)
+        - column for the measured available power (history)
         - columns for each device of the set states (history)
         - columns for each device of the states to be set (prediction)
         A row entry should be added for the columns containing history.
         This should be added to every timestep of the df (e.g. 15 mins).
-        The columns containing prediction will be updated periodicly.
+        The columns for the predicted states of the devices
+         will be updated periodically.
         This only needs to happen from the current timestep onwards.
         """
-        if self.df_solar_forecast is None:
-            return None
-        if not isinstance(self.df_solar_forecast.index, pd.DatetimeIndex):
-            raise TypeError(
-                f"Expected DatetimeIndex, got {type(self.df_solar_forecast.index)}"
-            )
         logger = self.logger
         logger.info("Initializing df daily schedule")
         now = datetime.now(self.START_FORECAST_TIME.tz)
+        curr_forecast_time = self.START_FORECAST_TIME.at_previous_date(now.date())
         next_forecast_time = self.START_FORECAST_TIME.at_next_date(now.date())
         logger.debug(f"now tz: {now.tzinfo}")
         logger.debug(f"next_forecast_time tz: {next_forecast_time.tzinfo}")
-        logger.debug(
-            f"df_solar_forecast index tz: {self.df_solar_forecast.index.tzinfo}"
+
+        new_datetime_index = pd.date_range(
+            start=curr_forecast_time,
+            end=next_forecast_time,
+            freq=f"{DELTA_T}h",
         )
-        try:
-            # Slice the solar forecast data to the next forecast time.
-            df_solar_slice = self.df_solar_forecast.loc[:next_forecast_time]
-            new_datetime_index = pd.date_range(
-                start=df_solar_slice.index.min(),
-                end=df_solar_slice.index.max(),
-                freq=f"{DELTA_T}h",
+
+        df_timeline = pd.DataFrame(index=new_datetime_index)
+        df_timeline[TimelineColNames.PREDICTED_POWER] = np.nan
+        df_timeline[TimelineColNames.MEASURED_POWER] = np.nan
+        # Initialize columns for sockets
+        for device in self.sorted_sockets:
+            df_timeline[TimelineColNames.measured_power_consumption(device)] = np.nan
+            df_timeline[TimelineColNames.predicted_power_consumption(device)] = np.nan
+        # Initialize columns for aggregate battery
+        df_timeline[
+            TimelineColNames.measured_power_consumption(
+                self.optimization.data.aggregate_battery
             )
-            df_timeline = df_solar_slice.reindex(new_datetime_index).interpolate(
-                method="time"
+        ] = np.nan
+        df_timeline[
+            TimelineColNames.predicted_power_consumption(
+                self.optimization.data.aggregate_battery
             )
-            df_timeline[TimelineColNames.PREDICTED_POWER] = (
-                df_timeline["power_kw"] * 1000
-            )
-            df_timeline[TimelineColNames.MEASURED_POWER] = np.nan
-            # Initialize columns for sockets
-            for device in self.sorted_sockets:
-                df_timeline[TimelineColNames.measured_power_consumption(device)] = (
-                    np.nan
-                )
-                df_timeline[TimelineColNames.predicted_power_consumption(device)] = (
-                    np.nan
-                )
-            # Initialize columns for aggregate battery
-            df_timeline[
-                TimelineColNames.measured_power_consumption(
-                    self.optimization.data.aggregate_battery
-                )
-            ] = np.nan
-            df_timeline[
-                TimelineColNames.predicted_power_consumption(
-                    self.optimization.data.aggregate_battery
-                )
-            ] = np.nan
-            return df_timeline
-        except Exception as e:
-            logger.error(
-                f"Error during initialization of df_timeline with solar forecast: {e}"
-            )
-            return None
+        ] = np.nan
+        return df_timeline
 
     async def daily_power_forecast(self):
         """
@@ -202,13 +184,43 @@ class DeviceController:
             )
             await asyncio.sleep(delay)
 
+            # in case it is the first attempt today:
             self.df_solar_forecast = self.get_forecast_data()
-            self.df_timeline = None
+            self.timeline_initialized_event.clear()
+            self.df_timeline = self.initialize_df_timeline()
+            self.timeline_initialized_event.set()
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
             self.logger.info(
                 "A new day has arrived so the energy stored "
                 "in the sockets is set back to 0.0"
+            )
+            retry_delay = BASIC_RETRY_DELAY
+            # in case the forecast was retrieved unsuccesfully, try again with a delay.
+            attempt = 0
+            while self.df_solar_forecast is None:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
+                attempt += 1
+                self.logger.info(
+                    "Attempting to acquire forecast data again. "
+                    f"Attempt number: {attempt}"
+                )
+                self.df_solar_forecast = self.get_forecast_data()
+
+            if not isinstance(self.df_solar_forecast.index, pd.DatetimeIndex):
+                raise TypeError(
+                    f"Expected DatetimeIndex, got {type(self.df_solar_forecast.index)}"
+                )
+            # Slice and reindex the solar forecast data with the index of df_timeline
+            df_solar_slice = self.df_solar_forecast.loc[
+                self.df_timeline.index.min() : self.df_timeline.index.max()
+            ]
+            df_interpolated_power = df_solar_slice.reindex(
+                self.df_timeline.index
+            ).interpolate(method="time")
+            self.df_timeline[TimelineColNames.PREDICTED_POWER] = (
+                df_interpolated_power * 1000
             )
 
     async def periodic_schedule_update(self):
@@ -227,7 +239,7 @@ class DeviceController:
                 logger.info(f"Total available power: {-total_power} W")
 
                 self.primary_scheduling_with_fallback(total_power)
-                self.update_df_timeline(-total_power)
+                await self.update_df_timeline(-total_power)
                 if self.on_raspberry_pi:
                     logger.info("Update E-paper display")
                     # Update display
@@ -352,17 +364,10 @@ class DeviceController:
         # Update the switch index for the circular buffer
         self.switch_index = (self.switch_index + 1) % PREV_SWITCHES_LEN
 
-    def update_df_timeline(self, available_power: float):
+    async def update_df_timeline(self, available_power: float):
         logger = self.logger
         logger.info("Updating data stored in df_timeline")
-        if self.df_timeline is None:
-            logger.info("Attempting to initialize df_timeline")
-            self.df_timeline = self.initialize_df_timeline()
-            if self.df_timeline is None:
-                logger.warning(
-                    "Updating failed, since df_timeline has not initialized properly. "
-                )
-                return
+        await self.timeline_initialized_event.wait()
 
         timeindex, pos_curr_timestep = self.get_curr_timeindex()
         if timeindex is None:
@@ -457,7 +462,7 @@ class DeviceController:
         if self.df_timeline is None:
             error_msg = (
                 "update_moving_average_columns should only be called "
-                "after it has been made that df_timeline is not None"
+                "if df_timeline has been initialized and is not None"
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
