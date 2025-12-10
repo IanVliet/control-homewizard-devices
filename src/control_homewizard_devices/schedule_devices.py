@@ -15,12 +15,40 @@ class ScheduleData:
         self,
         df_power: pd.DataFrame,
         delta_t: float,
-        socket_and_battery_list: list[SocketDevice | Battery],
     ) -> None:
         self.delta_t = delta_t
         self.df_power_interpolated, self.P_p, self.number_timesteps = (
             self.preprocess_power_data(df_power)
         )
+
+    def preprocess_power_data(self, df_power: pd.DataFrame):
+        """
+        Preprocess the power data by reindexing and interpolating.
+        """
+        new_datetime_index = pd.date_range(
+            start=df_power.index.min(),
+            end=df_power.index.max(),
+            freq=f"{self.delta_t}h",
+        )
+        df_power_interpolated = df_power.reindex(new_datetime_index).interpolate(
+            method="time"
+        )
+        df_power_interpolated[ColNames.POWER_W] = (
+            df_power_interpolated["power_kw"] * 1000
+        )
+        P_p: list[float] = (df_power_interpolated[ColNames.POWER_W]).to_list()
+        number_timesteps = len(P_p)
+        return df_power_interpolated, P_p, number_timesteps
+
+
+class DeviceLists:
+    def __init__(
+        self,
+        socket_and_battery_list: list[SocketDevice | Battery],
+    ):
+        """
+        Class to hold a variety of lists containing subsets of devices.
+        """
         self.socket_and_battery_list = socket_and_battery_list
         self.socket_list = [
             device
@@ -43,25 +71,6 @@ class ScheduleData:
             device for device in self.socket_list if not device.daily_need
         ]
 
-    def preprocess_power_data(self, df_power: pd.DataFrame):
-        """
-        Preprocess the power data by reindexing and interpolating.
-        """
-        new_datetime_index = pd.date_range(
-            start=df_power.index.min(),
-            end=df_power.index.max(),
-            freq=f"{self.delta_t}h",
-        )
-        df_power_interpolated = df_power.reindex(new_datetime_index).interpolate(
-            method="time"
-        )
-        df_power_interpolated[ColNames.POWER_W] = (
-            df_power_interpolated["power_kw"] * 1000
-        )
-        P_p: list[float] = (df_power_interpolated[ColNames.POWER_W]).to_list()
-        number_timesteps = len(P_p)
-        return df_power_interpolated, P_p, number_timesteps
-
 
 class Variables:
     """
@@ -70,14 +79,14 @@ class Variables:
     The scheduler will in turn have a model instance.
     """
 
-    def __init__(self, data: ScheduleData) -> None:
+    def __init__(self, data: ScheduleData, device_lists: DeviceLists) -> None:
         """
         Create my_variables for each device and time step.
         """
         self.df_variables = pd.DataFrame(
             index=data.df_power_interpolated.index, dtype=float
         )
-        for device in data.devices_list:
+        for device in device_lists.devices_list:
             # in schedule: a device with -1 provides power (e.g. a battery discharging),
             # 0 a device does nothing, 1 a device consumes power
             self.df_variables[ColNames.state(device)] = 0.0
@@ -95,14 +104,15 @@ class DeviceSchedulingOptimization:
 
     def __init__(
         self,
+        socket_and_battery_list: list[SocketDevice | Battery],
         delta_t: float = 0.25,
     ):
         self.delta_t = delta_t
+        self.device_lists = DeviceLists(socket_and_battery_list)
 
     def solve_schedule_devices(
         self,
         df_power: pd.DataFrame,
-        socket_and_battery_list: list[SocketDevice | Battery],
         overcharge: bool = False,
     ) -> tuple[ScheduleData, list[Variables]]:
         """
@@ -110,8 +120,8 @@ class DeviceSchedulingOptimization:
         """
         # create the problem to be optimized
         results: list[Variables] = []
-        self.data = ScheduleData(df_power, self.delta_t, socket_and_battery_list)
-        self.variables = Variables(self.data)
+        self.data = ScheduleData(df_power, self.delta_t)
+        self.variables = Variables(self.data, self.device_lists)
         # Predicted power -->
         # Available power taking into account already scheduled devices.
 
@@ -123,7 +133,7 @@ class DeviceSchedulingOptimization:
         # Needed devices can use 1, 2 and 3.
         # Optional devices can only use 1
 
-        for device in self.data.needed_socket_list:
+        for device in self.device_lists.needed_socket_list:
             # Determine minimum number of timesteps needed to charge the device.
             charge_duration = self.get_charge_duration(device)
 
@@ -138,7 +148,7 @@ class DeviceSchedulingOptimization:
             # without using power from the grid.
             # --- Find the timesteps where the battery can be used
             # to provide enough power for the device ---
-            if len(self.data.battery_list) > 0:
+            if len(self.device_lists.battery_list) > 0:
                 device_full = self.schedule_device_with_battery(device, charge_duration)
                 if device_full:
                     continue
@@ -147,10 +157,10 @@ class DeviceSchedulingOptimization:
             self.schedule_max_power(device, charge_duration)
             results.append(self.variables)
 
-        for device in self.data.optional_socket_list:
+        for device in self.device_lists.optional_socket_list:
             # If a battery is present and if a significant minimum battery charge is set
             # charge the batteries before turning on the device.
-            if len(self.data.battery_list) > 0 and not isclose(
+            if len(self.device_lists.battery_list) > 0 and not isclose(
                 device.min_battery_charge, 0.0, abs_tol=ABSOLUTE_TOLERANCE
             ):
                 self.charge_batteries_ratio(device.min_battery_charge)
@@ -171,11 +181,11 @@ class DeviceSchedulingOptimization:
             # To ensure each device is charged as much as possible
             # charge duration is set to the length of the dataframe
             max_duration = len(self.variables.df_variables.index)
-            for device in self.data.socket_list:
+            for device in self.device_lists.socket_list:
                 self.schedule_device_available_power(device, max_duration)
 
         # Charge the aggregate battery at the end of the schedule.
-        if len(self.data.battery_list) > 0:
+        if len(self.device_lists.battery_list) > 0:
             self.charge_batteries_remaining()
 
         results.append(self.variables)
@@ -243,7 +253,7 @@ class DeviceSchedulingOptimization:
                     cast(
                         int,
                         temp_df_variables.columns.get_loc(
-                            ColNames.energy_stored(self.data.aggregate_battery)
+                            ColNames.energy_stored(self.device_lists.aggregate_battery)
                         ),
                     ),
                 ]
@@ -252,7 +262,8 @@ class DeviceSchedulingOptimization:
                 # Charge/discharge the batteries during this step
                 if (
                     needed_power * self.delta_t > energy_stored
-                    or needed_power > self.data.aggregate_battery.max_power_usage
+                    or needed_power
+                    > self.device_lists.aggregate_battery.max_power_usage
                     or cast(
                         float,
                         temp_df_variables.iat[
@@ -325,26 +336,30 @@ class DeviceSchedulingOptimization:
                     cast(
                         int,
                         df_schedule.columns.get_loc(
-                            ColNames.energy_stored(self.data.aggregate_battery)
+                            ColNames.energy_stored(self.device_lists.aggregate_battery)
                         ),
                     ),
                 ],
             )
         else:
-            start_energy = self.data.aggregate_battery.energy_stored
+            start_energy = self.device_lists.aggregate_battery.energy_stored
         max_power = (
-            self.data.aggregate_battery.max_energy_stored - start_energy
+            self.device_lists.aggregate_battery.max_energy_stored - start_energy
         ) / self.delta_t
         added_power = min(
-            [self.data.aggregate_battery.max_power_usage, available_power, max_power]
+            [
+                self.device_lists.aggregate_battery.max_power_usage,
+                available_power,
+                max_power,
+            ]
         )
         columns = [
-            ColNames.state(self.data.aggregate_battery),
-            ColNames.energy_stored(self.data.aggregate_battery),
+            ColNames.state(self.device_lists.aggregate_battery),
+            ColNames.energy_stored(self.device_lists.aggregate_battery),
             ColNames.AVAILABLE_POWER,
         ]
         new_values = [
-            added_power / self.data.aggregate_battery.max_power_usage,
+            added_power / self.device_lists.aggregate_battery.max_power_usage,
             start_energy + added_power * self.delta_t,
             available_power - added_power,
         ]
@@ -357,7 +372,7 @@ class DeviceSchedulingOptimization:
             float,
             df_schedule.at[
                 df_schedule.index[timestep - 1],
-                ColNames.energy_stored(self.data.aggregate_battery),
+                ColNames.energy_stored(self.device_lists.aggregate_battery),
             ],
         )
         available_power = cast(
@@ -366,18 +381,18 @@ class DeviceSchedulingOptimization:
 
         possible_power = energy_stored / self.delta_t
         discharge_power = min(
-            self.data.aggregate_battery.max_power_usage,
+            self.device_lists.aggregate_battery.max_power_usage,
             possible_power,
             needed_power,
         )
         energy_stored -= discharge_power * self.delta_t
         columns = [
-            ColNames.state(self.data.aggregate_battery),
-            ColNames.energy_stored(self.data.aggregate_battery),
+            ColNames.state(self.device_lists.aggregate_battery),
+            ColNames.energy_stored(self.device_lists.aggregate_battery),
             ColNames.AVAILABLE_POWER,
         ]
         new_values = [
-            -discharge_power / self.data.aggregate_battery.max_power_usage,
+            -discharge_power / self.device_lists.aggregate_battery.max_power_usage,
             energy_stored,
             available_power + discharge_power,
         ]
@@ -442,17 +457,19 @@ class DeviceSchedulingOptimization:
 
         df_variables = self.variables.df_variables
         mask = (
-            (df_variables[ColNames.state(self.data.aggregate_battery)] == 0)
+            (df_variables[ColNames.state(self.device_lists.aggregate_battery)] == 0)
             & (df_variables[ColNames.AVAILABLE_POWER] != 0)
             & (
-                df_variables[ColNames.energy_stored(self.data.aggregate_battery)]
-                < (charge_ratio * self.data.aggregate_battery.max_energy_stored)
+                df_variables[
+                    ColNames.energy_stored(self.device_lists.aggregate_battery)
+                ]
+                < (charge_ratio * self.device_lists.aggregate_battery.max_energy_stored)
             )
         )
         # Power consumed (capped at max_power_usage)
         possible_power_consumed = df_variables.loc[mask, ColNames.AVAILABLE_POWER].clip(
-            lower=-self.data.aggregate_battery.max_power_usage,
-            upper=self.data.aggregate_battery.max_power_usage,
+            lower=-self.device_lists.aggregate_battery.max_power_usage,
+            upper=self.device_lists.aggregate_battery.max_power_usage,
         )
 
         # Update energy stored (capped at max_energy_stored)
@@ -460,20 +477,26 @@ class DeviceSchedulingOptimization:
         increased_energy.loc[mask] = possible_power_consumed * self.delta_t
         cumsum_energy = increased_energy.cumsum()
         new_energy_stored_unlimited = (
-            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            df_variables.loc[
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+            ]
             + cumsum_energy
         )
-        df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)] = (
-            new_energy_stored_unlimited.clip(
-                lower=0,
-                upper=(charge_ratio * self.data.aggregate_battery.max_energy_stored),
-            )
+        df_variables.loc[
+            mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+        ] = new_energy_stored_unlimited.clip(
+            lower=0,
+            upper=(
+                charge_ratio * self.device_lists.aggregate_battery.max_energy_stored
+            ),
         )
         # Calculate the actual power consumed
         actual_power_consumed = (
-            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            df_variables.loc[
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+            ]
             - df_variables.loc[
-                mask, ColNames.energy_stored(self.data.aggregate_battery)
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
             ]
             .shift(1)
             .fillna(0)
@@ -484,9 +507,11 @@ class DeviceSchedulingOptimization:
 
         # Update state (capped at 1)
         new_state = (
-            actual_power_consumed / self.data.aggregate_battery.max_power_usage
+            actual_power_consumed / self.device_lists.aggregate_battery.max_power_usage
         ).clip(lower=-1, upper=1)
-        df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
+        df_variables.loc[mask, ColNames.state(self.device_lists.aggregate_battery)] = (
+            new_state
+        )
 
     def charge_batteries_remaining(self):
         """
@@ -497,17 +522,19 @@ class DeviceSchedulingOptimization:
         """
         df_variables = self.variables.df_variables
         mask = (
-            (df_variables[ColNames.state(self.data.aggregate_battery)] == 0)
+            (df_variables[ColNames.state(self.device_lists.aggregate_battery)] == 0)
             & (df_variables[ColNames.AVAILABLE_POWER] != 0)
             & (
-                df_variables[ColNames.energy_stored(self.data.aggregate_battery)]
-                < self.data.aggregate_battery.max_energy_stored
+                df_variables[
+                    ColNames.energy_stored(self.device_lists.aggregate_battery)
+                ]
+                < self.device_lists.aggregate_battery.max_energy_stored
             )
         )
         # Power consumed (capped at max_power_usage)
         possible_power_consumed = df_variables.loc[mask, ColNames.AVAILABLE_POWER].clip(
-            lower=-self.data.aggregate_battery.max_power_usage,
-            upper=self.data.aggregate_battery.max_power_usage,
+            lower=-self.device_lists.aggregate_battery.max_power_usage,
+            upper=self.device_lists.aggregate_battery.max_power_usage,
         )
 
         # Update energy stored (capped at max_energy_stored)
@@ -515,19 +542,23 @@ class DeviceSchedulingOptimization:
         increased_energy.loc[mask] = possible_power_consumed * self.delta_t
         cumsum_energy = increased_energy.cumsum()
         new_energy_stored_unlimited = (
-            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            df_variables.loc[
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+            ]
             + cumsum_energy
         )
-        df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)] = (
-            new_energy_stored_unlimited.clip(
-                lower=0, upper=self.data.aggregate_battery.max_energy_stored
-            )
+        df_variables.loc[
+            mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+        ] = new_energy_stored_unlimited.clip(
+            lower=0, upper=self.device_lists.aggregate_battery.max_energy_stored
         )
         # Calculate the actual power consumed
         actual_power_consumed = (
-            df_variables.loc[mask, ColNames.energy_stored(self.data.aggregate_battery)]
+            df_variables.loc[
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
+            ]
             - df_variables.loc[
-                mask, ColNames.energy_stored(self.data.aggregate_battery)
+                mask, ColNames.energy_stored(self.device_lists.aggregate_battery)
             ]
             .shift(1)
             .fillna(0)
@@ -538,19 +569,22 @@ class DeviceSchedulingOptimization:
 
         # Update state (capped at 1)
         new_state = (
-            actual_power_consumed / self.data.aggregate_battery.max_power_usage
+            actual_power_consumed / self.device_lists.aggregate_battery.max_power_usage
         ).clip(lower=-1, upper=1)
-        df_variables.loc[mask, ColNames.state(self.data.aggregate_battery)] = new_state
+        df_variables.loc[mask, ColNames.state(self.device_lists.aggregate_battery)] = (
+            new_state
+        )
 
     def update_dataframe(
         self,
         schedule: dict[tuple[str, int], Any],
         data: ScheduleData,
+        device_lists: DeviceLists,
     ):
         """
         Update the DataFrame with the schedules of each device.
         """
-        for device in data.socket_and_battery_list:
+        for device in device_lists.socket_and_battery_list:
             self.data.df_power_interpolated[f"schedule {device.device_name}"] = 0.0
             for t, datetime_index in enumerate(data.df_power_interpolated.index):
                 data.df_power_interpolated.at[
@@ -559,7 +593,7 @@ class DeviceSchedulingOptimization:
         return data.df_power_interpolated
 
 
-def print_schedule_results(schedule_data: ScheduleData, results: list[Variables]):
+def print_schedule_results(results: list[Variables]):
     """
     Print the results of the optimization.
     """

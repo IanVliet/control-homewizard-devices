@@ -70,7 +70,9 @@ class DeviceController:
             key=lambda d: d.priority,
         )
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
-        self.optimization = DeviceSchedulingOptimization(DELTA_T)
+        self.optimization = DeviceSchedulingOptimization(
+            self.socket_and_battery_list, DELTA_T
+        )
         self.prev_switches = np.zeros(
             (PREV_SWITCHES_LEN, len(self.sorted_sockets)), dtype=bool
         )
@@ -163,12 +165,12 @@ class DeviceController:
         # Initialize columns for aggregate battery
         df_timeline[
             TimelineColNames.measured_power_consumption(
-                self.optimization.data.aggregate_battery
+                self.optimization.device_lists.aggregate_battery
             )
         ] = np.nan
         df_timeline[
             TimelineColNames.predicted_power_consumption(
-                self.optimization.data.aggregate_battery
+                self.optimization.device_lists.aggregate_battery
             )
         ] = np.nan
         return df_timeline
@@ -302,7 +304,7 @@ class DeviceController:
                 logger.debug(f"Power prediction DataFrame:\n{df_power_prediction}")
 
                 data, results = self.optimization.solve_schedule_devices(
-                    df_power_prediction, self.socket_and_battery_list, overcharge=True
+                    df_power_prediction, overcharge=True
                 )
                 self.df_power_interpolated = data.df_power_interpolated
                 self.df_schedule = results[-1].df_variables
@@ -385,7 +387,7 @@ class DeviceController:
             # Logging message is present in get_next_timeindex
             return
         # Update the predicted values
-        for device in self.optimization.data.devices_list:
+        for device in self.optimization.device_lists.devices_list:
             logger.debug(
                 f"Updating predicted power consumption for {device.device_name} "
                 "in df_timeline from states in df_schedule"
@@ -437,11 +439,11 @@ class DeviceController:
         return next_timeindex
 
     def get_total_inst_power_usage_aggregate_battery(self):
-        length_battery_list = len(self.optimization.data.battery_list)
+        length_battery_list = len(self.optimization.device_lists.battery_list)
         if length_battery_list == 0:
             return 0.0
         total_inst_power_usage_aggregate_battery = 0.0
-        for battery in self.optimization.data.battery_list:
+        for battery in self.optimization.device_lists.battery_list:
             if battery.inst_power_usage is None:
                 self.logger.warning(
                     f"{battery.device_name}'s inst_power_usage is None. "
@@ -489,7 +491,7 @@ class DeviceController:
             self.df_timeline.at[
                 timeindex,
                 TimelineColNames.measured_power_consumption(
-                    self.optimization.data.aggregate_battery
+                    self.optimization.device_lists.aggregate_battery
                 ),
             ] = total_inst_power_usage_aggregate_battery
         else:
@@ -501,7 +503,7 @@ class DeviceController:
             self.update_moving_average(
                 timeindex, TimelineColNames.MEASURED_POWER, available_power
             )
-            for device in self.optimization.data.devices_list:
+            for device in self.optimization.device_lists.devices_list:
                 if isinstance(device, SocketDevice):
                     if device.inst_power_usage is None:
                         self.logger.warning(
