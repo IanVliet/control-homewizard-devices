@@ -207,9 +207,11 @@ class DeviceController:
             self.timeline_initialized_event.set()
             for socket in self.sorted_sockets:
                 socket.energy_stored = 0.0
+                socket.in_control = True
             self.logger.info(
                 "A new day has arrived so the energy stored "
-                "in the sockets is set back to 0.0"
+                "in the sockets is set back to 0.0 and "
+                "the program assumes back control."
             )
 
     def update_df_timeline_with_forecast(self):
