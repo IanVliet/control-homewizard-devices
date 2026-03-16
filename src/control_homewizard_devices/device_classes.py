@@ -1,6 +1,8 @@
+import logging
+import asyncio
+
 from homewizard_energy import HomeWizardEnergy
 from control_homewizard_devices.hwe_v2_wrapper.init_wrapper import HomeWizardEnergyV2
-import logging
 from dataclasses import dataclass
 from time import time
 from .constants import AGGREGATE_BATTERY
@@ -60,14 +62,19 @@ class CompleteDevice:
         """
         if self.hwe_device is not None:
             # Get device information, like firmware version
-            hwe_device_info = await self.hwe_device.device()
-            logger.info(hwe_device_info)
-
-            # Get measurement --> power and current
-            measurement = await self.hwe_device.data()
-            self.inst_power_usage = measurement.active_power_w
-            self.inst_current = measurement.active_current_a
-
+            try:
+                async with asyncio.timeout(30.0):
+                    hwe_device_info = await self.hwe_device.device()
+                    logger.info(hwe_device_info)
+                    # Get measurement --> power and current
+                    measurement = await self.hwe_device.data()
+                    self.inst_power_usage = measurement.active_power_w
+                    self.inst_current = measurement.active_current_a
+            except TimeoutError:
+                logger.error(
+                    f"The request for {self._device_name} took more than 30 seconds "
+                    "and was stopped."
+                )
             # log power and current
             logger.info(f"{self.device_name} power: {self.inst_power_usage}")
             logger.info(f"{self.device_name} current: {self.inst_current}")
