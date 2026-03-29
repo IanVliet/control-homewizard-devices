@@ -1,5 +1,4 @@
 import logging
-from logging.handlers import TimedRotatingFileHandler
 from control_homewizard_devices.device_classes import (
     CompleteDevice,
     SocketDevice,
@@ -44,11 +43,6 @@ def setup_logger():
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] - %(message)s")
     logger = logging.getLogger(__name__)
-    file_handler = TimedRotatingFileHandler(
-        "logs/app.log", when="midnight", interval=1, backupCount=7
-    )
-    file_handler.suffix = "%Y-%m-%d"  # add date to rotated files
-    file_handler.setFormatter(formatter)
 
     # Stream handler for console output
     stream_handler = logging.StreamHandler()
@@ -56,7 +50,6 @@ def setup_logger():
 
     # Configure logger
     logger.setLevel(log_level)
-    logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
     return logger
 
