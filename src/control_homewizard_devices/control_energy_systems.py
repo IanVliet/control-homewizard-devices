@@ -363,16 +363,24 @@ class DeviceController:
                 self.prev_switches[self.switch_index, socket_index] = False
                 continue
             # Switch has occured
-            if np.any(self.prev_switches[:, socket_index]):
+            elif np.any(self.prev_switches[:, socket_index]):
                 # If a switch has already occured in the recent past,
-                # do not allow switching
-                self.logger.info(
-                    f"Switch for socket {socket.device_name} not allowed, "
-                    "since a switch has already occured recently."
-                )
-                # Keep previous state
-                # socket.updated_state = socket.updated_state
-                self.prev_switches[self.switch_index, socket_index] = False
+                # Only allow manual switching
+                if (socket.inst_state == new_state) and (socket.inst_state is False):
+                    self.logger.info(
+                        f"Accepting manual switch off for socket {socket.device_name}."
+                    )
+                    socket.updated_state = new_state
+                    # Update the prev_switches array
+                    self.prev_switches[self.switch_index, socket_index] = True
+                else:
+                    self.logger.info(
+                        f"Switch for socket {socket.device_name} not allowed, "
+                        "since a switch has already occured recently."
+                    )
+                    # Keep previous state
+                    # socket.updated_state = socket.updated_state
+                    self.prev_switches[self.switch_index, socket_index] = False
             else:
                 socket.updated_state = new_state
                 # Update the prev_switches array
