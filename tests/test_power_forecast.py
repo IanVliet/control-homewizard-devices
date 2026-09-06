@@ -90,6 +90,29 @@ def test_single_device_only_on_needed(power_1kw, request):
     ]
 
 
+def test_device_list_can_be_refreshed(power_1kw):
+    first_device = SocketDevice(
+        "", "HWE-SKT", "first socket", 1000, 1000, 1, True, delta_t=DELTA_T_TEST
+    )
+    second_device = SocketDevice(
+        "", "HWE-SKT", "second socket", 1000, 1000, 2, True, delta_t=DELTA_T_TEST
+    )
+    optimization = DeviceSchedulingOptimization(
+        [first_device, second_device], DELTA_T_TEST
+    )
+
+    optimization.update_device_list([first_device])
+    _, results = optimization.solve_schedule_devices(power_1kw)
+
+    assert f"state {first_device.device_name}" in results[-1].df_variables
+    assert f"state {second_device.device_name}" not in results[-1].df_variables
+
+    optimization.update_device_list([first_device, second_device])
+    _, results = optimization.solve_schedule_devices(power_1kw)
+
+    assert f"state {second_device.device_name}" in results[-1].df_variables
+
+
 def test_single_socket_only_on_optional(power_1kw, request):
     """
     The socket should be scheduled to turn on for the entire duration,

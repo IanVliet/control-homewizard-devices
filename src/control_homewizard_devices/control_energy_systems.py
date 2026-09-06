@@ -69,6 +69,8 @@ class DeviceController:
             ],
             key=lambda d: d.priority,
         )
+        self.active_socket_list = self.sorted_sockets.copy()
+        self.active_socket_and_battery_list = self.socket_and_battery_list.copy()
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
         self.optimization = DeviceSchedulingOptimization(
             self.socket_and_battery_list, DELTA_T
@@ -247,11 +249,29 @@ class DeviceController:
         retry_delay = BASIC_RETRY_DELAY
         while True:
             try:
+                measurement_tasks = {}
                 async with asyncio.TaskGroup() as tg:
                     for device in self.all_devices:
-                        tg.create_task(device.perform_measurement(logger))
+                        measurement_tasks[device] = tg.create_task(
+                            self.measure_device(device)
+                        )
+                self.active_socket_and_battery_list = [
+                    device
+                    for device in self.socket_and_battery_list
+                    if measurement_tasks[device].result()
+                ]
+                self.active_socket_list = [
+                    device
+                    for device in self.sorted_sockets
+                    if measurement_tasks[device].result()
+                ]
+                self.optimization.update_device_list(
+                    self.active_socket_and_battery_list
+                )
                 logger.info("===== devices info gathered and updated =====")
-                total_power = self.get_total_available_power()
+                total_power = self.get_total_available_power(
+                    self.active_socket_and_battery_list
+                )
                 logger.info(f"Total available power: {-total_power} W")
 
                 self.primary_scheduling_with_fallback(total_power)
@@ -264,7 +284,7 @@ class DeviceController:
                     )
 
                 async with asyncio.TaskGroup() as tg:
-                    for socket in self.sorted_sockets:
+                    for socket in self.active_socket_list:
                         tg.create_task(socket.update_power_state(logger))
                 logger.info("===== socket states updated =====")
                 retry_delay = BASIC_RETRY_DELAY
@@ -273,16 +293,24 @@ class DeviceController:
             except* RequestError as eg:
                 for err in eg.exceptions:
                     logger.error(f"Device error: {err}")
-                logger.error(f"Global connection issue. Retrying in {retry_delay}s...")
+                logger.error(f"Connection issue. Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY)
 
-    def get_total_available_power(self) -> float:
+    async def measure_device(self, device):
+        try:
+            await device.perform_measurement(self.logger)
+        except (RequestError, TimeoutError) as err:
+            self.logger.error(f"Failed to read {device.device_name}: {err}")
+            return False
+        return True
+
+    def get_total_available_power(self, devices=None) -> float:
+        if devices is None:
+            devices = self.all_devices
         return sum(
             power
-            for power in (
-                device.get_instantaneous_power() for device in self.all_devices
-            )
+            for power in (device.get_instantaneous_power() for device in devices)
             if power is not None
         )
 
@@ -356,7 +384,8 @@ class DeviceController:
         main_result = results[-1]
         df_schedule = main_result.df_variables
         current_schedule = df_schedule.iloc[0]
-        for socket_index, socket in enumerate(self.sorted_sockets):
+        for socket in self.active_socket_list:
+            socket_index = self.sorted_sockets.index(socket)
             new_state = True if current_schedule[ColNames.state(socket)] > 0 else False
             if socket.updated_state == new_state:
                 # No switch has occured
@@ -563,7 +592,7 @@ class DeviceController:
     def simple_determine_socket_states(self, total_power):
         # available power is defined as - total power
         available_power = -total_power
-        sorted_sockets = self.sorted_sockets
+        sorted_sockets = self.active_socket_list
 
         for socket in sorted_sockets:
             if socket.should_power_on(available_power):

@@ -110,6 +110,12 @@ class DeviceSchedulingOptimization:
         self.delta_t = delta_t
         self.device_lists = DeviceLists(socket_and_battery_list)
 
+    def update_device_list(
+        self, socket_and_battery_list: list[SocketDevice | Battery]
+    ) -> None:
+        """Update the devices that are available for the next schedule."""
+        self.device_lists = DeviceLists(socket_and_battery_list)
+
     def solve_schedule_devices(
         self,
         df_power: pd.DataFrame,
