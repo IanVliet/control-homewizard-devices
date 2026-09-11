@@ -69,6 +69,7 @@ class DeviceController:
             ],
             key=lambda d: d.priority,
         )
+        self.active_devices = self.all_devices.copy()
         self.active_socket_list = self.sorted_sockets.copy()
         self.active_socket_and_battery_list = self.socket_and_battery_list.copy()
         self.df_solar_forecast: pd.DataFrame | None = self.get_forecast_data()
@@ -241,6 +242,22 @@ class DeviceController:
         df_timeline_str = self.df_timeline.to_string(float_format="%.3f")
         self.logger.debug(f"df_timeline:\\n{df_timeline_str}")
 
+    def update_active_devices(self, measurement_tasks: dict):
+        self.active_devices = [
+            device for device in self.all_devices if measurement_tasks[device].result()
+        ]
+        self.active_socket_and_battery_list = [
+            device
+            for device in self.socket_and_battery_list
+            if measurement_tasks[device].result()
+        ]
+        self.active_socket_list = [
+            device
+            for device in self.sorted_sockets
+            if measurement_tasks[device].result()
+        ]
+        self.optimization.update_device_list(self.active_socket_and_battery_list)
+
     async def periodic_schedule_update(self):
         """
         Periodically updates the schedule for all devices.
@@ -255,23 +272,10 @@ class DeviceController:
                         measurement_tasks[device] = tg.create_task(
                             self.measure_device(device)
                         )
-                self.active_socket_and_battery_list = [
-                    device
-                    for device in self.socket_and_battery_list
-                    if measurement_tasks[device].result()
-                ]
-                self.active_socket_list = [
-                    device
-                    for device in self.sorted_sockets
-                    if measurement_tasks[device].result()
-                ]
-                self.optimization.update_device_list(
-                    self.active_socket_and_battery_list
-                )
+
+                self.update_active_devices(measurement_tasks)
                 logger.info("===== devices info gathered and updated =====")
-                total_power = self.get_total_available_power(
-                    self.active_socket_and_battery_list
-                )
+                total_power = self.get_total_available_power(self.active_devices)
                 logger.info(f"Total available power: {-total_power} W")
 
                 self.primary_scheduling_with_fallback(total_power)
