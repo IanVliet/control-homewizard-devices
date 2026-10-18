@@ -4,6 +4,7 @@ from control_homewizard_devices.device_classes import (
     SocketDevice,
     P1Device,
     Battery,
+    MarstekBattery,
     AggregateBattery,
 )
 import json
@@ -14,7 +15,12 @@ from datetime import datetime, date, time, timedelta
 import argparse
 import platform
 
-DEVICE_TYPE_MAP = {"HWE-SKT": SocketDevice, "HWE-P1": P1Device, "HWE-BAT": Battery}
+DEVICE_TYPE_MAP = {
+    "HWE-SKT": SocketDevice,
+    "HWE-P1": P1Device,
+    "HWE-BAT": Battery,
+    "MARSTEK-BAT": MarstekBattery,
+}
 
 
 # Setting up the logger in the main function

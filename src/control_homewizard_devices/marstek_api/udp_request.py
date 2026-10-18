@@ -112,6 +112,21 @@ async def request_marstek_es_status(
     return parse_marstek_es_status(response)
 
 
+class MarstekUDPClient:
+    def __init__(self, host: str, port: int = 50000):
+        self.host = host
+        self.port = port
+
+    async def __aenter__(self) -> "MarstekUDPClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+        return None
+
+    async def es_status(self) -> MarstekESStatus | None:
+        return await request_marstek_es_status(self.host, self.port)
+
+
 async def send_status_request(target_ip: str, target_port: int) -> int:
     failed = False
 

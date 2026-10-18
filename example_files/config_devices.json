@@ -25,6 +25,14 @@
                 "name": "local/name (replace with actual name)",
                 "token": "(replace with actual token)"
             }
+        },
+        {
+            "device_name": "Marstek Venus",
+            "device_type": "MARSTEK-BAT",
+            "ip_address": "192.0.2.2 (replace with actual IP)",
+            "port": 50000,
+            "max_power_usage": 800,
+            "energy_capacity": 2080
         }
     ],
     "solar panels": [

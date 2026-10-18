@@ -11,6 +11,7 @@ from control_homewizard_devices.constants import (
     DELTA_T,
     IS_FULL_POWER_RATIO,
 )
+from control_homewizard_devices.marstek_api.udp_request import MarstekUDPClient
 
 
 class CompleteDevice:
@@ -284,15 +285,15 @@ class Battery(CompleteDevice):
         device_name: str,
         max_power_usage: float,
         energy_capacity: float,
-        user_info: dict[str, str],
+        user_info: dict[str, str] | None = None,
         **kwargs,
     ):
         super().__init__(ip_address, device_type, device_name, **kwargs)
         self.max_power_usage = max_power_usage
         self.energy_capacity = energy_capacity
         # Batteries do not have a daily need (they never draw from the grid)
-        self._user_info = UserInfo(**user_info)
-        self._token = self._user_info.token
+        self._user_info = UserInfo(**user_info) if user_info is not None else None
+        self._token = self._user_info.token if self._user_info is not None else None
 
         self.policy = BatterySchedulePolicy(self)
         self.state_of_charge_pct = None
@@ -307,6 +308,8 @@ class Battery(CompleteDevice):
         self._hwe_device = device
 
     def get_HWE_class(self):
+        if self._token is None:
+            raise ValueError("HomeWizard batteries require user_info with a token")
         return HomeWizardEnergyV2(host=self.ip_address, token=self._token)
 
     async def perform_measurement(self, logger: logging.Logger):
@@ -347,6 +350,58 @@ class Battery(CompleteDevice):
             return None
         else:
             return -self.inst_power_usage
+
+
+class MarstekBattery(Battery):
+    def __init__(
+        self,
+        ip_address: str,
+        device_type: str,
+        device_name: str,
+        max_power_usage: float,
+        energy_capacity: float,
+        port: int = 50000,
+        **kwargs,
+    ):
+        super().__init__(
+            ip_address=ip_address,
+            device_type=device_type,
+            device_name=device_name,
+            max_power_usage=max_power_usage,
+            energy_capacity=energy_capacity,
+            user_info=None,
+            **kwargs,
+        )
+        self.port = port
+
+    @property
+    def hwe_device(self) -> MarstekUDPClient | None:
+        return self._hwe_device
+
+    @hwe_device.setter
+    def hwe_device(self, device: MarstekUDPClient | None):
+        self._hwe_device = device
+
+    def get_HWE_class(self) -> MarstekUDPClient:
+        return MarstekUDPClient(host=self.ip_address, port=self.port)
+
+    async def perform_measurement(self, logger: logging.Logger):
+        if self.hwe_device is None:
+            logger.warning(f"{self.device_name}'s Marstek client is None.")
+            return
+
+        status = await self.hwe_device.es_status()
+        if status is None:
+            logger.warning(f"Failed to read {self.device_name} status.")
+            return
+
+        self.inst_power_usage = status.ongrid_power
+        self.state_of_charge_pct = status.bat_soc
+        self.energy_capacity = status.bat_cap
+        self.policy.energy_stored_upper = self.energy_capacity
+        self.update_energy_stored(logger)
+        logger.info(f"{self.device_name} power: {self.inst_power_usage} W")
+        logger.info(f"{self.device_name} percentage: {self.state_of_charge_pct} %")
 
 
 class DeviceSchedulePolicy:
