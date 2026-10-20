@@ -2,11 +2,16 @@ import socket
 import asyncio
 import json
 import argparse
+import math
 from dataclasses import asdict, dataclass
 from itertools import count
 from typing import Any
 
 _request_ids = count(1)
+
+
+class InvalidMarstekResponseError(ValueError):
+    """Raised when a Marstek response cannot be parsed as ES status."""
 
 
 @dataclass(frozen=True)
@@ -80,25 +85,55 @@ async def request_response_udp(
 
 
 def parse_marstek_es_status(response: bytes) -> MarstekESStatus:
-    response_data = json.loads(response)
+    try:
+        response_data = json.loads(response)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise InvalidMarstekResponseError(
+            "Marstek ES status response is not valid JSON"
+        ) from error
+
     if not isinstance(response_data, dict):
-        raise ValueError("Marstek ES status response must be a JSON object")
+        raise InvalidMarstekResponseError(
+            "Marstek ES status response must be a JSON object"
+        )
 
     status_data = response_data.get("result", response_data)
     if not isinstance(status_data, dict):
-        raise ValueError("Marstek ES status result must be a JSON object")
+        raise InvalidMarstekResponseError(
+            "Marstek ES status result must be a JSON object"
+        )
 
-    return MarstekESStatus(
-        bat_soc=status_data["bat_soc"],
-        bat_cap=status_data["bat_cap"],
-        pv_power=status_data["pv_power"],
-        ongrid_power=status_data["ongrid_power"],
-        offgrid_power=status_data["offgrid_power"],
-        total_pv_energy=status_data["total_pv_energy"],
-        total_grid_output_energy=status_data["total_grid_output_energy"],
-        total_grid_input_energy=status_data["total_grid_input_energy"],
-        total_load_energy=status_data["total_load_energy"],
+    required_fields = (
+        "bat_soc",
+        "bat_cap",
+        "pv_power",
+        "ongrid_power",
+        "offgrid_power",
+        "total_pv_energy",
+        "total_grid_output_energy",
+        "total_grid_input_energy",
+        "total_load_energy",
     )
+    missing_fields = [field for field in required_fields if field not in status_data]
+    if missing_fields:
+        raise InvalidMarstekResponseError(
+            f"Marstek ES status result is missing fields: {', '.join(missing_fields)}"
+        )
+
+    values: dict[str, int | float] = {}
+    for field in required_fields:
+        value = status_data[field]
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or (isinstance(value, float) and not math.isfinite(value))
+        ):
+            raise InvalidMarstekResponseError(
+                f"Marstek ES status field {field!r} must be a finite number"
+            )
+        values[field] = value
+
+    return MarstekESStatus(**values)
 
 
 async def request_marstek_es_status(
@@ -131,7 +166,12 @@ async def send_status_request(target_ip: str, target_port: int) -> int:
     failed = False
 
     print("Requesting ES status...")
-    es_status = await request_marstek_es_status(target_ip, target_port)
+    try:
+        es_status = await request_marstek_es_status(target_ip, target_port)
+    except InvalidMarstekResponseError as error:
+        print(f"Invalid ES status response: {error}")
+        return 1
+
     if es_status is None:
         failed = True
     else:

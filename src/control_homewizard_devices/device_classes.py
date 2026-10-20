@@ -11,7 +11,10 @@ from control_homewizard_devices.constants import (
     DELTA_T,
     IS_FULL_POWER_RATIO,
 )
-from control_homewizard_devices.marstek_api.udp_request import MarstekUDPClient
+from control_homewizard_devices.marstek_api.udp_request import (
+    InvalidMarstekResponseError,
+    MarstekUDPClient,
+)
 
 
 class CompleteDevice:
@@ -390,7 +393,16 @@ class MarstekBattery(Battery):
             logger.warning(f"{self.device_name}'s Marstek client is None.")
             return
 
-        status = await self.hwe_device.es_status()
+        try:
+            status = await self.hwe_device.es_status()
+        except InvalidMarstekResponseError as error:
+            logger.warning(
+                "Ignoring invalid status response from %s: %s",
+                self.device_name,
+                error,
+            )
+            return
+
         if status is None:
             logger.warning(f"Failed to read {self.device_name} status.")
             return
